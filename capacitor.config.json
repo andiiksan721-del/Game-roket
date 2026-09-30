@@ -1,0 +1,12 @@
+{
+  "appId": "com.nusantara.bimasakti",
+  "appName": "Bima Sakti Explorer",
+  "webDir": "www",
+  "backgroundColor": "#000000",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "cleartext": true
+  }
+}

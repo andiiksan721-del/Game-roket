@@ -1,0 +1,18 @@
+{
+  "name": "bima-sakti-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bima Sakti Explorer 3D — Simulasi Roket Realistis (Capacitor wrapper)",
+  "dependencies": {
+    "@capacitor/android": "^6.1.4",
+    "@capacitor/core": "^6.1.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.4"
+  },
+  "scripts": {
+    "sync": "npm run copy-www && npx cap sync android",
+    "copy-www": "mkdir -p www && cp index.html www/index.html",
+    "build-apk": "npm run sync && cd android && ./gradlew assembleDebug"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+www/
+*.jks
+*.keystore
+local.properties
+.DS_Store
+# Build outputs (tapi source android/ tetap di-commit agar patch MainActivity/Manifest ikut)
+android/.gradle/
+android/build/
+android/app/build/
+android/app/release.jks
