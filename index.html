@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<title>BIMA SAKTI EXPLORER 3D — Simulasi Roket Realistis</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#dfefff;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
+  #game{position:fixed;inset:0}
+  #game canvas{touch-action:none}
+  #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,10,.55) 100%);z-index:3}
+  #speedlines{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .3s;z-index:3;
+    background:repeating-conic-gradient(from 0deg at 50% 50%,transparent 0deg 2deg,rgba(150,200,255,.06) 2deg 2.4deg);}
+  /* HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10}
+  #topbar{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .panel{background:rgba(6,12,28,.72);border:1px solid rgba(90,160,255,.28);border-radius:12px;backdrop-filter:blur(10px);box-shadow:0 0 24px rgba(40,100,255,.15)}
+  #status{padding:10px 14px;min-width:280px}
+  #status h1{font-size:15px;letter-spacing:2px;color:#7dc4ff}
+  #status h1 span{color:#fff}
+  .bar{height:8px;background:#101c36;border-radius:6px;margin:6px 0 2px;overflow:hidden;border:1px solid rgba(255,255,255,.12)}
+  .bar>i{display:block;height:100%;border-radius:6px;transition:width .2s}
+  #fuelBar>i{background:linear-gradient(90deg,#00e676,#b2ff59)}
+  #hullBar>i{background:linear-gradient(90deg,#00b0ff,#7dc4ff)}
+  #boostBar>i{background:linear-gradient(90deg,#ff9100,#ffea00)}
+  .row{display:flex;justify-content:space-between;font-size:11px;opacity:.9;margin-top:2px}
+  .row b{color:#fff;font-variant-numeric:tabular-nums}
+  #targetBox{padding:10px 14px;min-width:260px;max-width:340px;text-align:right}
+  #targetBox h2{font-size:13px;color:#ffd47d;letter-spacing:1px}
+  #targetBox p{font-size:11px;line-height:1.5;opacity:.9;margin-top:4px}
+  #targetBox #tDist{font-size:20px;color:#fff;font-weight:700}
+  /* speed */
+  #speedo{position:absolute;left:12px;bottom:12px;padding:12px 16px;display:flex;gap:16px;align-items:center}
+  #speedNum{font-size:34px;font-weight:800;color:#fff;line-height:1}
+  #speedNum small{font-size:11px;color:#7dc4ff;font-weight:400;display:block;letter-spacing:2px}
+  #throttleWrap{width:140px}
+  /* controls help */
+  #help{position:absolute;right:12px;bottom:12px;padding:10px 12px;font-size:11px;line-height:1.7;max-width:270px}
+  #help kbd{background:#1a2a4d;border:1px solid #3a5a8a;border-bottom-width:3px;border-radius:5px;padding:0 6px;font-size:10px;color:#fff;font-family:inherit}
+  /* crosshair + target marker */
+  #cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;opacity:.8}
+  #cross:before,#cross:after{content:'';position:absolute;background:#7dc4ff}
+  #cross:before{left:6px;top:0;width:2px;height:14px}
+  #cross:after{top:6px;left:0;width:14px;height:2px}
+  #followBadge{position:absolute;left:50%;top:calc(50% + 24px);transform:translateX(-50%);font-size:10px;letter-spacing:2px;color:#7dffb0;background:rgba(0,40,20,.55);border:1px solid rgba(0,255,136,.4);padding:2px 10px;border-radius:12px;white-space:nowrap}
+  #marker{position:absolute;width:54px;height:54px;margin:-27px 0 0 -27px;pointer-events:none;display:none}
+  #marker div{position:absolute;inset:0;border:2px solid #ffca28;border-radius:50%;animation:spin 3s linear infinite}
+  #marker span{position:absolute;top:58px;left:50%;transform:translateX(-50%);font-size:11px;white-space:nowrap;background:rgba(0,0,0,.6);padding:2px 8px;border-radius:6px;border:1px solid rgba(255,202,40,.5)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* Galaxy map */
+  #galaxyMap{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(1,3,12,.82);backdrop-filter:blur(6px)}
+  #galaxyMap.open{display:flex}
+  #mapCard{width:min(920px,95vw);max-height:92vh;overflow:auto;padding:18px}
+  #mapCard h2{letter-spacing:3px;color:#7dc4ff;font-size:16px}
+  #mapFlex{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px}
+  #mapCanvas{width:480px;max-width:100%;height:480px;background:radial-gradient(circle at 50% 50%,#0a1430,#01020a);border-radius:12px;border:1px solid rgba(125,196,255,.3);cursor:crosshair}
+  #planetList{flex:1;min-width:260px;max-height:480px;overflow:auto}
+  .pItem{display:flex;gap:10px;align-items:center;padding:8px;border-radius:10px;border:1px solid transparent;cursor:pointer;pointer-events:auto}
+  .pItem:hover,.pItem.active{background:rgba(60,120,255,.15);border-color:rgba(125,196,255,.4)}
+  .dot{width:18px;height:18px;border-radius:50%;flex-shrink:0;box-shadow:0 0 10px currentColor}
+  .pItem b{font-size:13px;display:block}
+  .pItem small{font-size:11px;opacity:.75}
+  .btn{pointer-events:auto;cursor:pointer;border:1px solid rgba(125,196,255,.5);background:linear-gradient(180deg,#1a3a7a,#0d1f45);color:#fff;border-radius:10px;padding:10px 16px;font-weight:700;letter-spacing:1px}
+  .btn:hover{filter:brightness(1.3)}
+  .btn.warn{border-color:#ffb300;background:linear-gradient(180deg,#7a3a00,#3a1e00)}
+  /* loading + start */
+  #start{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 30% 20%,#0a1a3f 0%,#02040d 60%,#000 100%)}
+  #startCard{width:min(640px,94vw);padding:28px;text-align:center}
+  #startCard h1{font-size:28px;letter-spacing:4px;background:linear-gradient(90deg,#7dc4ff,#fff,#c490ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  #startCard p{font-size:13px;line-height:1.7;opacity:.9;margin:12px 0}
+  #planetBadges{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:10px 0;font-size:11px}
+  #planetBadges span{border:1px solid rgba(125,196,255,.35);border-radius:20px;padding:3px 10px;background:rgba(20,40,80,.5)}
+  #toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:15;background:rgba(10,20,40,.9);border:1px solid #7dc4ff;padding:8px 18px;border-radius:20px;font-size:12px;display:none}
+  #warpFlash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:5;transition:opacity .4s}
+  /* Kontrol sentuh tablet/HP */
+  #touchUI{position:fixed;inset:0;z-index:11;pointer-events:none;display:none}
+  body.touch #touchUI{display:block}
+  body.touch #help{display:none}
+  #joy{position:absolute;left:14px;bottom:86px;width:124px;height:124px;border-radius:50%;border:2px solid rgba(125,196,255,.4);background:rgba(10,25,55,.35);pointer-events:auto;touch-action:none}
+  #stick{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#bfe0ff,#2a5a9a);box-shadow:0 0 14px rgba(125,196,255,.7)}
+  #tBtns{position:absolute;right:12px;bottom:86px;display:grid;grid-template-columns:repeat(2,64px);gap:10px;pointer-events:auto}
+  #tBtns button{width:64px;height:64px;border-radius:50%;border:1px solid rgba(125,196,255,.55);background:rgba(20,45,95,.65);color:#fff;font-size:11px;font-weight:800;touch-action:none}
+  #tBtns button:active{background:#2a6aff}
+  #tBtns .big{grid-column:span 2;width:100%;border-radius:14px;height:48px}
+  #btnQuality{pointer-events:auto;padding:8px 10px;font-size:11px}
+  @media(max-width:700px){#help{display:none}#status{min-width:0}
+    #status{transform:scale(.85);transform-origin:top left}
+    #targetBox{transform:scale(.85);transform-origin:top right;max-width:250px}
+    #speedo{bottom:220px;transform:scale(.85);transform-origin:bottom left}
+    #mapCanvas{height:300px}
+  }
+</style>
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+</head>
+<body>
+<div id="game"></div>
+<div id="vignette"></div>
+<div id="speedlines"></div>
+<div id="warpFlash"></div>
+
+<div id="hud">
+  <div id="topbar">
+    <div class="panel" id="status">
+      <h1>🚀 BIMA SAKTI <span>EXPLORER</span></h1>
+      <div class="row"><span>BAHAN BAKAR</span><b id="fuelTxt">100%</b></div>
+      <div class="bar" id="fuelBar"><i style="width:100%"></i></div>
+      <div class="row"><span>LAMBUNG ROKET</span><b id="hullTxt">100%</b></div>
+      <div class="bar" id="hullBar"><i style="width:100%"></i></div>
+      <div class="row"><span>BOOST WARP</span><b id="boostTxt">READY</b></div>
+      <div class="bar" id="boostBar"><i style="width:100%"></i></div>
+      <div class="row"><span>📍 LOKASI</span><b id="locTxt">Bumi</b></div>
+      <div class="row"><span>🎯 MISI</span><b id="missionTxt">0 / 14 planet</b></div>
+    </div>
+    <div class="panel" id="targetBox">
+      <h2 id="tName">🎯 TARGET: MARS</h2>
+      <div id="tDist">-- km</div>
+      <p id="tDesc">Planet merah. Tekan <b>ENTER / tombol WARP</b> untuk melompat, atau terbang manual.</p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn" id="btnWarp">⚡ WARP [Enter]</button>
+        <button class="btn" id="btnMap">🌌 PETA [G]</button>
+      </div>
+    </div>
+  </div>
+  <div id="cross"></div>
+  <div id="followBadge">🛰️ IKUTI KAMERA: ON</div>
+  <div id="marker"><div></div><span id="markerTxt"></span></div>
+  <div class="panel" id="speedo">
+    <div id="speedNum">0<small>KM/S</small></div>
+    <div id="throttleWrap">
+      <div class="row"><span>THROTTLE</span><b id="thrTxt">0%</b></div>
+      <div class="bar" id="hullBar2" style="border-color:#00e676"><i id="thrFill" style="width:0%;background:linear-gradient(90deg,#00e676,#fff)"></i></div>
+      <div class="row"><span>KAMERA [C]</span><b id="camTxt">KEJAR</b></div>
+    </div>
+  </div>
+  <div class="panel" id="help">
+    <b style="color:#7dc4ff">KONTROL ROKET</b><br>
+    <kbd>W</kbd>/<kbd>S</kbd> gas/rem &nbsp;<kbd>A</kbd>/<kbd>D</kbd> belok banking &nbsp;<kbd>scroll</kbd> gas presisi<br>
+    <kbd>R</kbd>/<kbd>F</kbd>/<kbd>↑</kbd><kbd>↓</kbd> pitch &nbsp;<kbd>←</kbd><kbd>→</kbd> belok &nbsp;<kbd>Q</kbd>/<kbd>E</kbd> roll<br>
+    <kbd>X</kbd> rem darurat &nbsp;<kbd>SPACE</kbd> boost &nbsp;drag = lihat bebas<br>
+    <kbd>Tab</kbd> target &nbsp;<kbd>Enter</kbd> warp &nbsp;<kbd>C</kbd> kamera &nbsp;<kbd>V</kbd> ikuti kamera &nbsp;<kbd>G</kbd> peta &nbsp;dobel-klik = reset pandang
+  </div>
+  <div style="position:absolute;left:12px;top:46%;display:flex;flex-direction:column;gap:8px">
+    <button class="btn" id="btnQuality" style="padding:8px 10px;font-size:11px">⚙️ HEMAT: ON</button>
+  </div>
+</div>
+<div id="touchUI">
+  <div id="joy"><div id="stick"></div></div>
+  <div id="tBtns">
+    <button id="tUp">▲</button><button id="tDown">▼</button>
+    <button id="tBoost">BOOST</button><button id="tWarp">WARP</button>
+    <button id="tBrake">REM</button><button id="tCam">CAM</button>
+    <button id="tFollow" class="big">IKUTI ON</button>
+    <button id="tTarget" class="big">🎯 TARGET ▸</button>
+    <button id="tMap" class="big">🌌 PETA</button>
+  </div>
+</div>
+
+<div id="galaxyMap">
+  <div class="panel" id="mapCard">
+    <h2>🌌 PETA BIMA SAKTI — <span id="mapCount"></span></h2>
+    <p style="font-size:12px;opacity:.8">Klik titik di peta / daftar planet untuk memilih target, lalu tekan WARP. Skala galaksi dimampatkan agar bisa dijelajahi (diameter asli ±100.000 tahun cahaya).</p>
+    <div id="mapFlex">
+      <canvas id="mapCanvas" width="480" height="480"></canvas>
+      <div id="planetList"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn" id="btnWarp2">⚡ WARP KE TARGET</button>
+      <button class="btn warn" id="btnCloseMap">TUTUP [G]</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="start">
+  <div class="panel" id="startCard">
+    <h1>BIMA SAKTI EXPLORER</h1>
+    <p>Simulasi eksplorasi luar angkasa 3D realistis. Kamu adalah pilot roket antarbintang <b>NUSANTARA-1</b>.
+    Jelajahi <b>8 planet Tata Surya + 7 planet ekstrasurya nyata</b> (Proxima b, TRAPPIST-1e, Kepler-186f, dll),
+    dengan fisika inersia, atmosfer bercahaya, cincin Saturnus, sabuk asteroid, lubang hitam, dan nebula Bima Sakti.</p>
+    <div id="planetBadges"><span>☿ Merkurius</span><span>♀ Venus</span><span>🌍 Bumi</span><span>♂ Mars</span><span>♃ Jupiter</span><span>♄ Saturnus</span><span>♅ Uranus</span><span>♆ Neptunus</span><span>✨ Proxima b</span><span>🔭 TRAPPIST-1e</span><span>🪐 Kepler-186f</span></div>
+    <p style="font-size:11px">🖱️ Drag = bidik (roket mengikuti) • WASD/panah = terbang • Scroll = gas • X = rem • V = ikuti/bebas • Tablet: joystick = bidik, ▲▼ = gas</p>
+    <button class="btn" id="btnStart" style="font-size:16px;padding:14px 40px">🚀 LUNCURKAN ROKET</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ============ DATA PLANET NYATA ============ */
+const SYSTEMS = [
+ {star:"Matahari", starColor:0xffdd88, starPos:[0,0,0], desc:"Bintang katai kuning, pusat Tata Surya.", planets:[
+  {name:"Merkurius", r:6, dist:120, speed:.55, color1:"#8a7f72", color2:"#4a443c", type:"rock", desc:"Planet terkecil & tercepat. Permukaan kawah ekstrem, suhu -180°C s/d 430°C."},
+  {name:"Venus", r:10, dist:170, speed:.4, color1:"#e8c07a", color2:"#8a5a20", type:"cloud", desc:"Neraka berkabut CO₂ & asam sulfat. Tekanan 92x Bumi, 465°C."},
+  {name:"Bumi", r:11, dist:230, speed:.32, color1:"#1a66ff", color2:"#0a3311", type:"earth", desc:"Rumah kita. Satu-satunya planet dengan lautan cair & kehidupan."},
+  {name:"Mars", r:8, dist:290, speed:.26, color1:"#e05a2b", color2:"#7a2a10", type:"rock", desc:"Planet merah. Gunung Olympus Mons tertinggi di Tata Surya (22 km)."},
+  {name:"Jupiter", r:34, dist:400, speed:.16, color1:"#d8a86a", color2:"#8a4a2a", type:"gas", desc:"Raksasa gas. Bintik Merah badai 300 tahun lebih besar dari Bumi."},
+  {name:"Saturnus", r:29, dist:520, speed:.12, color1:"#e8d49a", color2:"#9a7a40", type:"gas", ring:true, desc:"Raja cincin es. Kepadatan lebih ringan dari air."},
+  {name:"Uranus", r:19, dist:630, speed:.09, color1:"#7de8e0", color2:"#2a7a8a", type:"ice", desc:"Raksasa es yang miring 98°. Suhu -224°C, terdingin."},
+  {name:"Neptunus", r:18, dist:730, speed:.07, color1:"#2a5aff", color2:"#0a1a6a", type:"ice", desc:"Angin 2.100 km/jam tercepat. Ditemukan lewat perhitungan matematika."},
+ ]},
+ {star:"Proxima Centauri", starColor:0xff6a5a, starPos:[3200,400,-1800], desc:"Katai merah, bintang terdekat (4,24 thn cahaya).", planets:[
+  {name:"Proxima Centauri b", r:11, dist:140, speed:.5, color1:"#3a8a5a", color2:"#0a2a1a", type:"earth", desc:"Exoplanet zona laik huni terdekat! 1,07 massa Bumi."},
+ ]},
+ {star:"TRAPPIST-1", starColor:0xff9a6a, starPos:[-2800,-500,-2400], desc:"Katai merah ultra-dingin, 7 planet berbatu (39 thn cahaya).", planets:[
+  {name:"TRAPPIST-1e", r:10, dist:150, speed:.45, color1:"#2a9ad8", color2:"#0a2a4a", type:"earth", desc:"Kandidat Bumi kedua terbaik. 95% ukuran Bumi, zona laik huni."},
+  {name:"TRAPPIST-1f", r:10, dist:200, speed:.35, color1:"#7ac8e8", color2:"#1a4a6a", type:"ice", desc:"Dunia samudra beku di tepi zona laik huni."},
+ ]},
+ {star:"Kepler-186", starColor:0xffd8a0, starPos:[800,-600,3400], desc:"Katai merah di Cygnus (492 thn cahaya).", planets:[
+  {name:"Kepler-186f", r:12, dist:170, speed:.3, color1:"#4ad87a", color2:"#0a4a2a", type:"earth", desc:"Exoplanet seukuran Bumi pertama di zona laik huni. 'Sepupu Bumi'."},
+ ]},
+ {star:"Vega", starColor:0xaaccff, starPos:[-1500,900,2900], desc:"Bintang biru-putih terang di Lyra (25 thn cahaya).", planets:[
+  {name:"Vega-b (Aurora)", r:22, dist:220, speed:.25, color1:"#9ad8ff", color2:"#2a4a9a", type:"gas", ring:true, desc:"Raksasa gas fiktif-ilmiah di piringan puing Vega yang nyata."},
+ ]},
+ {star:"Sagittarius A*", starColor:0xc490ff, starPos:[0,0,-9000], isBlackHole:true, desc:"Lubang hitam supermasif pusat Bima Sakti (4 juta massa Matahari).", planets:[
+  {name:"Cakram Sagitarius", r:60, dist:0, speed:0, color1:"#c490ff", color2:"#220033", type:"hole", desc:"JANGAN mendekat! Gravitasi ekstrem. Objek wisata berbahaya."},
+ ]},
+];
+
+const ALL_PLANETS=[];
+SYSTEMS.forEach(s=>s.planets.forEach(p=>{p.star=s.star;p.starPos=s.starPos;ALL_PLANETS.push(p);}));
+
+/* ============ SCENE (OPTIMASI TABLET) ============ */
+const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+const IS_MOBILE=IS_TOUCH||/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||Math.min(screen.width,screen.height)<760;
+if(IS_TOUCH)document.body.classList.add('touch');
+let QUALITY=IS_MOBILE?'hemat':'full'; // hemat | full
+const Q=()=>QUALITY==='hemat'?1:0;
+const container=document.getElementById('game');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x01020a);
+const camera=new THREE.PerspectiveCamera(78,innerWidth/innerHeight,.1,120000);
+const renderer=new THREE.WebGLRenderer({antialias:!IS_MOBILE,powerPreference:'high-performance',stencil:false,depth:true});
+renderer.setSize(innerWidth,innerHeight);
+function applyPixelRatio(){renderer.setPixelRatio(QUALITY==='hemat'?Math.min(devicePixelRatio,1.25):Math.min(devicePixelRatio,2));}
+applyPixelRatio();
+container.appendChild(renderer.domElement);
+// sinematik: tone-mapping + filter anisotropik (tajam dari sudut miring, murah di GPU)
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.15;
+const maxAniso=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+// titik bulat lembut untuk bintang/partikel (ganti kotak default)
+const dotTex=(function(){
+  const c=document.createElement('canvas');c.width=c.height=64;
+  const x=c.getContext('2d');
+  const g=x.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.35,'rgba(255,255,255,.9)');g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=g;x.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+})();
+if(IS_MOBILE)renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+
+scene.add(new THREE.AmbientLight(0x334466,.38));
+const sunLight=new THREE.PointLight(0xfff2dd,4500,9000,1.4); // intensitas fisik r155+: mesti ribuan agar sampai (Bumi ~2.2, Neptunus ~0.4)
+scene.add(sunLight);
+
+/* ---- texture procedural HD (tajam, anti-generik) ---- */
+function shade(hex,f){
+  const n=parseInt(hex.slice(1),16);
+  return `rgb(${(n>>16)*f|0},${((n>>8)&255)*f|0},${(n&255)*f|0})`;
+}
+function grain(x,W,H,amt){
+  const img=x.getImageData(0,0,W,H),dd=img.data;
+  for(let i=0;i<dd.length;i+=4){const n=(Math.random()-.5)*amt;dd[i]+=n;dd[i+1]+=n;dd[i+2]+=n;}
+  x.putImageData(img,0,0);
+}
+function blob(x,cx,cy,rx,ry,rot,color,alpha){
+  x.save();if(alpha!==undefined)x.globalAlpha=alpha;x.fillStyle=color;
+  x.beginPath();x.ellipse(cx,cy,rx,ry,rot||0,0,7);x.fill();x.restore();
+}
+/* --- wajah planet sesuai foto asli (kanvas equirectangular, atas = kutub utara) --- */
+function paintEarth(x,W,H,u){
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0a2560');g.addColorStop(.5,'#12408f');g.addColorStop(1,'#0a2560');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  const GREEN='#3f7d38',FOREST='#2a5c28',DESERT='#c9a85c',COAST='#a8905e';
+  const lands=[ // [cx,cy,rx,ry,warna] fraksi kanvas — tata letak benua Bumi asli
+    [.13,.30,.075,.075,GREEN],[.20,.36,.06,.07,GREEN],[.24,.44,.035,.05,GREEN],
+    [.31,.14,.035,.045,'#dfe8ee'],
+    [.28,.60,.045,.10,GREEN],[.29,.73,.028,.06,GREEN],
+    [.51,.40,.06,.09,GREEN],[.52,.55,.04,.07,GREEN],
+    [.50,.35,.075,.045,DESERT],[.60,.40,.035,.035,DESERT],
+    [.60,.66,.014,.035,GREEN],
+    [.49,.26,.045,.05,GREEN],
+    [.63,.28,.11,.08,GREEN],[.73,.30,.07,.07,GREEN],
+    [.65,.42,.028,.045,GREEN],[.73,.46,.03,.04,GREEN],
+    [.85,.67,.045,.035,DESERT],
+  ];
+  for(const [cx,cy,rx,ry,col] of lands){
+    blob(x,cx*W,cy*H,rx*W,ry*H,0,COAST);
+    blob(x,cx*W,cy*H,rx*W*.8,ry*H*.78,0,col);
+  }
+  for(let i=0;i<26;i++)
+    blob(x,Math.random()*W,H*.25+Math.random()*H*.5,(4+Math.random()*14)*u,(3+Math.random()*8)*u,0,FOREST,.7);
+  blob(x,.50*W,.35*H,.05*W,.03*H,0,DESERT);
+  x.fillStyle='rgba(245,250,255,.96)';x.fillRect(0,H*.93,W,H*.07);
+  for(const edge of [0,H])
+    for(let sx=0;sx<W;sx+=10)
+      blob(x,sx,edge,(8+Math.random()*14)*u,(8+Math.random()*14)*u,0,'rgba(245,250,255,.95)');
+}
+function paintMars(x,W,H,u){
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#7a2f12');g.addColorStop(.3,'#c1551f');g.addColorStop(.55,'#d4692a');g.addColorStop(.8,'#b34a1c');g.addColorStop(1,'#7a2f12');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  blob(x,.72*W,.46*H,.05*W,.05*H,.5,'rgba(70,25,12,.55)');
+  blob(x,.30*W,.32*H,.09*W,.05*H,0,'rgba(80,30,14,.4)');
+  blob(x,.55*W,.55*H,.06*W,.03*H,0,'rgba(75,28,13,.45)');
+  blob(x,.15*W,.60*H,.07*W,.06*H,0,'rgba(85,32,15,.35)');
+  blob(x,.65*W,.68*H,.06*W,.045*H,0,'rgba(225,190,150,.5)');
+  x.strokeStyle='rgba(60,20,10,.6)';x.lineWidth=Math.max(2,3*u);
+  x.beginPath();x.moveTo(.42*W,.53*H);x.lineTo(.60*W,.55*H);x.stroke();
+  x.fillStyle='rgba(250,245,240,.95)';x.fillRect(0,0,W,H*.03);
+  x.fillRect(0,H*.965,W,H*.035);
+  for(let i=0;i<70;i++)
+    blob(x,Math.random()*W,Math.random()*H,(1.5+Math.random()*6)*u,(1.5+Math.random()*6)*u,0,`rgba(0,0,0,${.2+Math.random()*.25})`);
+}
+function paintJupiter(x,W,H,u){
+  const bands=[
+    [0,.07,'#a89a90'],[.07,.15,'#7a6a62'],[.15,.23,'#d8c8b0'],[.23,.31,'#9a5a2e'],
+    [.31,.39,'#e8d8c0'],[.39,.45,'#b87848'],[.45,.55,'#f2ead8'],[.55,.61,'#a85834'],
+    [.61,.69,'#e2d2b6'],[.69,.77,'#8a6a7a'],[.77,.85,'#c0b0a4'],[.85,1,'#6a7a8c'],
+  ];
+  for(const [a,b,col] of bands){x.fillStyle=col;x.fillRect(0,a*H,W,(b-a)*H+1);}
+  for(let b=0;b<bands.length;b++){
+    const y0=bands[b][1]*H;
+    for(let sx=0;sx<W;sx+=8){
+      const yy=y0+Math.sin(sx*.02+b*1.7)*H*.012;
+      x.fillStyle=b%2?'rgba(255,240,220,.10)':'rgba(70,30,12,.10)';
+      x.fillRect(sx,yy-3*u,8,6*u);
+    }
+  }
+  for(let i=0;i<70;i++)
+    blob(x,Math.random()*W,Math.random()*H,(4+Math.random()*14)*u,(3+Math.random()*7)*u,0,
+      Math.random()>.5?`rgba(255,245,230,${.08+Math.random()*.1})`:`rgba(90,40,18,${.08+Math.random()*.1})`);
+  blob(x,.68*W,.63*H,.075*W,.075*H,0,'rgba(232,175,135,.85)');
+  blob(x,.68*W,.63*H,.055*W,.055*H,0,'rgba(192,62,26,.92)');
+  blob(x,.68*W,.63*H,.028*W,.03*H,0,'rgba(140,30,15,.9)');
+  for(let i=0;i<5;i++)
+    blob(x,(.15+i*.13)*W,.78*H,.02*W,.014*H,0,'rgba(245,240,230,.8)');
+}
+function paintSaturn(x,W,H,u){
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#9a9a7a');g.addColorStop(.18,'#d8bd7f');g.addColorStop(.4,'#e8d49a');
+  g.addColorStop(.6,'#dfc084');g.addColorStop(.82,'#c8a86e');g.addColorStop(1,'#8a8a6a');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  for(let b=0;b<9;b++){
+    const y0=(b+.5)/9*H;
+    for(let sx=0;sx<W;sx+=10){
+      const yy=y0+Math.sin(sx*.015+b*2)*H*.01;
+      x.fillStyle=b%2?`rgba(255,245,220,${.05+Math.random()*.05})`:`rgba(120,90,50,${.05+Math.random()*.05})`;
+      x.fillRect(sx,yy-4*u,10,8*u);
+    }
+  }
+  blob(x,.5*W,.88*H,.3*W,.06*H,0,'rgba(140,110,70,.35)');
+}
+function paintIceGiant(x,W,H,u,neptune){
+  const g=x.createLinearGradient(0,0,0,H);
+  if(neptune){g.addColorStop(0,'#1a2aaa');g.addColorStop(.5,'#2a5aff');g.addColorStop(1,'#16207a');}
+  else{g.addColorStop(0,'#8ad8d4');g.addColorStop(.5,'#a5ece8');g.addColorStop(1,'#7ac8c4');}
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  for(let b=0;b<5;b++){
+    const y0=(b+.5)/5*H;
+    x.fillStyle=neptune?`rgba(200,220,255,${.05+Math.random()*.05})`:`rgba(255,255,255,${.04+Math.random()*.04})`;
+    x.fillRect(0,y0,W,(2+Math.random()*4)*u);
+  }
+  if(neptune){
+    blob(x,.40*W,.55*H,.05*W,.05*H,0,'rgba(10,20,80,.75)');
+    x.fillStyle='rgba(230,245,255,.55)';
+    for(let i=0;i<8;i++)x.fillRect(Math.random()*W,H*.3+Math.random()*H*.3,W*.06,H*.008);
+  }else{
+    blob(x,.5*W,.1*H,.2*W,.08*H,0,'rgba(255,255,255,.25)');
+  }
+}
+function paintVenus(x,W,H,u){
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#b08a4a');g.addColorStop(.3,'#e8c07a');g.addColorStop(.55,'#f0d49a');g.addColorStop(.8,'#dda860');g.addColorStop(1,'#a8803f');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  for(let i=0;i<26;i++){
+    const cy=H*.2+Math.random()*H*.6;
+    x.strokeStyle=Math.random()>.5?`rgba(255,245,220,${.10+Math.random()*.12})`:`rgba(160,100,40,${.10+Math.random()*.12})`;
+    x.lineWidth=(3+Math.random()*7)*u;
+    x.beginPath();
+    for(let sx=0;sx<=W;sx+=16){
+      const yy=cy+Math.sin(sx*.01+i)*H*.03-Math.abs(sx-W/2)*.06;
+      sx===0?x.moveTo(sx,yy):x.lineTo(sx,yy);
+    }
+    x.stroke();
+  }
+}
+function paintMercury(x,W,H,u){
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#5a534c');g.addColorStop(.5,'#8a8178');g.addColorStop(1,'#544e47');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  for(let i=0;i<150;i++){
+    const cx=Math.random()*W,cy=Math.random()*H,r=(1+Math.random()*6)*u;
+    blob(x,cx,cy,r,r,0,`rgba(0,0,0,${.25+Math.random()*.3})`);
+    x.strokeStyle='rgba(255,255,255,.25)';x.lineWidth=Math.max(1,r*.3);
+    x.beginPath();x.arc(cx,cy,r,Math.PI*1.1,Math.PI*1.7);x.stroke();
+  }
+  for(let i=0;i<4;i++){
+    const cx=Math.random()*W,cy=Math.random()*H;
+    x.strokeStyle='rgba(230,225,215,.3)';x.lineWidth=1.5*u;
+    for(let k=0;k<10;k++){const a=k/10*Math.PI*2;
+      x.beginPath();x.moveTo(cx,cy);x.lineTo(cx+Math.cos(a)*30*u,cy+Math.sin(a)*30*u);x.stroke();}
+  }
+}
+function paintExo(x,W,H,u,p){
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,shade(p.color2,.6));g.addColorStop(.5,p.color1);g.addColorStop(1,shade(p.color2,.6));
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  if(p.type==='gas'||p.type==='ice'){
+    for(let b=0;b<10;b++){
+      const y0=(b+.5)/10*H;
+      for(let sx=0;sx<W;sx+=8){
+        const yy=y0+Math.sin(sx*.018+b*1.7)*H*.014;
+        x.fillStyle=b%2?`rgba(255,240,220,${.06+Math.random()*.08})`:`rgba(40,30,60,${.06+Math.random()*.08})`;
+        x.fillRect(sx,yy-4*u,8,8*u);
+      }
+    }
+  }else if(p.type==='earth'){
+    for(let i=0;i<8;i++)
+      blob(x,Math.random()*W,H*.22+Math.random()*H*.56,(15+Math.random()*45)*u,(10+Math.random()*25)*u,Math.random()*3,p.color2);
+    x.fillStyle='rgba(245,250,255,.9)';x.fillRect(0,0,W,H*.04);x.fillRect(0,H*.96,W,H*.04);
+  }else{
+    for(let i=0;i<90;i++)
+      blob(x,Math.random()*W,Math.random()*H,(1+Math.random()*6)*u,(1+Math.random()*6)*u,0,`rgba(0,0,0,${.2+Math.random()*.3})`);
+  }
+}
+function makeTex(p){
+  const W=QUALITY==='hemat'?512:1024,H=QUALITY==='hemat'?256:512;
+  const c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');
+  const u=W/512; // skala unit agar proporsional di semua resolusi
+  const n=p.name; // wajah tiap planet sesuai foto aslinya
+  if(n==='Bumi')paintEarth(x,W,H,u);
+  else if(n==='Mars')paintMars(x,W,H,u);
+  else if(n.includes('Jupiter'))paintJupiter(x,W,H,u);
+  else if(n.includes('Saturnus'))paintSaturn(x,W,H,u);
+  else if(n.includes('Uranus'))paintIceGiant(x,W,H,u,false);
+  else if(n.includes('Neptunus'))paintIceGiant(x,W,H,u,true);
+  else if(n==='Venus')paintVenus(x,W,H,u);
+  else if(n==='Merkurius')paintMercury(x,W,H,u);
+  else paintExo(x,W,H,u,p);
+  grain(x,W,H,p.type==='gas'?14:22); // butir mikro anti-banding
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=maxAniso;return t;
+}
+function makeCloudTex(){
+  const W=512,H=256,c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');x.clearRect(0,0,W,H);
+  for(let i=0;i<52;i++){
+    const cx=Math.random()*W,cy=H*.15+Math.random()*H*.7;
+    const rx=(14+Math.random()*46),ry=rx*(.25+Math.random()*.25);
+    x.fillStyle=`rgba(255,255,255,${.22+Math.random()*.2})`;
+    x.beginPath();x.ellipse(cx,cy,rx,ry,0,0,7);x.fill();
+    x.fillStyle=`rgba(255,255,255,${.25+Math.random()*.25})`;
+    x.beginPath();x.ellipse(cx,cy,rx*.5,ry*.5,0,0,7);x.fill();
+  }
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+}
+function makeRingTex(){
+  const W=512,H=16,c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');
+  for(let i=0;i<W;i++){
+    const u=i/W;
+    let a=.9;
+    if(u<.07)a*=(u/.07); // tepi dalam pudar
+    if(u>.94)a*=((1-u)/.06); // tepi luar pudar
+    if(u>.6&&u<.65)a=.06; // Pembagian Cassini
+    if(u>.32&&u<.345)a*=.45; // celah Encke
+    const v=200+Math.random()*55|0;
+    x.fillStyle=`rgba(${v},${185+Math.random()*30|0},${140+Math.random()*30|0},${a})`;
+    x.fillRect(i,0,1,H);
+  }
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=maxAniso;return t;
+}
+function makeSunTex(){
+  const W=512,H=256,c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');
+  const g=x.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#c33d00');g.addColorStop(.25,'#ff8a1a');g.addColorStop(.5,'#ffb13d');g.addColorStop(.75,'#ff8a1a');g.addColorStop(1,'#c33d00');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  for(let i=0;i<260;i++){ // granulasi
+    x.fillStyle=Math.random()>.5?`rgba(255,230,150,${.15+Math.random()*.25})`:`rgba(160,40,0,${.15+Math.random()*.25})`;
+    x.beginPath();x.arc(Math.random()*W,Math.random()*H,1+Math.random()*5,0,7);x.fill();
+  }
+  grain(x,W,H,30);
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+}
+function makeDiskTex(){ // cakram akresi lubang hitam
+  const S=256,c=document.createElement('canvas');c.width=c.height=S;
+  const x=c.getContext('2d');x.clearRect(0,0,S,S);
+  for(let i=0;i<700;i++){
+    const a=Math.random()*Math.PI*2, r=44+Math.pow(Math.random(),.7)*80;
+    const px=128+Math.cos(a)*r, py=128+Math.sin(a)*r*.82;
+    const hot=r<70;
+    x.fillStyle=hot?`rgba(255,220,160,${.3+Math.random()*.5})`:(Math.random()>.4?`rgba(150,90,255,${.2+Math.random()*.4})`:`rgba(255,120,80,${.2+Math.random()*.4})`);
+    x.beginPath();x.arc(px,py,.6+Math.random()*2.2,0,7);x.fill();
+  }
+  x.strokeStyle='rgba(240,220,255,.95)';x.lineWidth=3;
+  x.beginPath();x.arc(128,128,43,0,7);x.stroke(); // cincin foton dalam
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+}
+function glowSprite(color,size){
+  const S=QUALITY==='hemat'?64:128;
+  const c=document.createElement('canvas');c.width=c.height=S;
+  const x=c.getContext('2d');
+  const g=x.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+  g.addColorStop(0,'#fff');g.addColorStop(.25,color);g.addColorStop(1,'rgba(0,0,0,0)');
+  x.fillStyle=g;x.fillRect(0,0,S,S);
+  const t=new THREE.CanvasTexture(c);
+  const m=new THREE.SpriteMaterial({map:t,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true});
+  const s=new THREE.Sprite(m);s.scale.set(size,size,1);return s;
+}
+function atmosphereMesh(r,color){
+  const SEG=QUALITY==='hemat'?16:32;
+  const m=new THREE.Mesh(new THREE.SphereGeometry(r*1.18,SEG,SEG),
+    new THREE.ShaderMaterial({uniforms:{c:{value:new THREE.Color(color)}},
+      vertexShader:'varying vec3 vN;void main(){vN=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+      fragmentShader:'uniform vec3 c;varying vec3 vN;void main(){float i=pow(.65-dot(vN,vec3(0,0,1.)),2.5);gl_FragColor=vec4(c,1.)*i*1.4;}',
+      side:THREE.BackSide,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false}));
+  return m;
+}
+
+/* ---- latar: bintang jauh + Bima Sakti ---- */
+function starPoints(n,rMin,rMax,size){
+  const pos=new Float32Array(n*3),col=new Float32Array(n*3);
+  const palette=[[1,1,1],[.7,.85,1],[1,.9,.7],[1,.6,.5],[.6,1,1]];
+  for(let i=0;i<n;i++){
+    const r=rMin+Math.random()*(rMax-rMin);
+    const th=Math.random()*Math.PI*2, ph=Math.acos(2*Math.random()-1);
+    pos[i*3]=r*Math.sin(ph)*Math.cos(th);pos[i*3+1]=r*Math.sin(ph)*Math.sin(th);pos[i*3+2]=r*Math.cos(ph);
+    const p=palette[Math.floor(Math.random()*palette.length)],b=.4+Math.random()*.6;
+    col[i*3]=p[0]*b;col[i*3+1]=p[1]*b;col[i*3+2]=p[2]*b;
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));
+  return new THREE.Points(g,new THREE.PointsMaterial({size,map:dotTex,vertexColors:true,sizeAttenuation:false,transparent:true,opacity:.95,depthWrite:false}));
+}
+scene.add(starPoints(QUALITY==='hemat'?2500:7000,20000,60000,IS_MOBILE?3:2.2));
+// pita Bima Sakti: 25rb titik pipih miring
+(function(){
+  const n=QUALITY==='hemat'?8000:25000,pos=new Float32Array(n*3),col=new Float32Array(n*3);
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, r=Math.pow(Math.random(),.6)*30000;
+    const spread=(1-r/35000)*2600*Math.random();
+    pos[i*3]=Math.cos(a)*r+(Math.random()-.5)*800;
+    pos[i*3+1]=(Math.random()-.5)*spread+(Math.random()-.5)*400;
+    pos[i*3+2]=Math.sin(a)*r+(Math.random()-.5)*800;
+    const warm=Math.random();let cr,cg,cb;
+    if(r<5000){cr=1;cg=.85;cb=.65;}else if(warm>.6){cr=.65;cg=.75;cb=1;}else{cr=1;cg=1;cb=1;}
+    const b=.25+Math.random()*.55;
+    col[i*3]=cr*b;col[i*3+1]=cg*b;col[i*3+2]=cb*b;
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const pts=new THREE.Points(g,new THREE.PointsMaterial({size:3.2,map:dotTex,vertexColors:true,transparent:true,opacity:.8,depthWrite:false}));
+  pts.rotation.x=.5;pts.rotation.z=.25;
+  scene.add(pts);
+})();
+// nebula jauh
+[['#ff4a8a',9000,6000,-22000],['#4a6aff',-8000,-4000,-20000],['#4affd8',0,8000,-24000],['#8a4aff',10000,-5000,18000]].forEach(([c,x,y,z])=>{
+  const s=glowSprite(c,14000);s.position.set(x,y,z);s.material.opacity=.35;scene.add(s);
+});
+
+/* ---- bangun bintang + planet ---- */
+const planetObjs=[]; // {data, mesh, angle, starPos, dist, clouds?}
+let sunMesh=null,sunGlow=null,bhRim=null;
+function addLabel(text){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;color:#cfe6ff;font-size:11px;pointer-events:none;z-index:4;text-shadow:0 0 6px #000;display:none;background:rgba(0,10,30,.55);padding:1px 7px;border-radius:8px;border:1px solid rgba(125,196,255,.3)';
+  d.textContent=text;document.body.appendChild(d);return d;
+}
+SYSTEMS.forEach(sys=>{
+  const [sx,sy,sz]=sys.starPos;
+  const SEG=QUALITY==='hemat'?16:32, PSEG=QUALITY==='hemat'?32:64;
+  const TILT={Merkurius:.03,Venus:3.09,Bumi:.41,Mars:.44,Jupiter:.05,Saturnus:.47,Uranus:1.71,Neptunus:.49};
+  if(sys.isBlackHole){
+    const hole=new THREE.Mesh(new THREE.SphereGeometry(28,SEG,SEG),new THREE.MeshBasicMaterial({color:0x000000}));
+    hole.position.set(sx,sy,sz);scene.add(hole);
+    const disk=new THREE.Mesh(new THREE.RingGeometry(34,110,64),
+      new THREE.MeshBasicMaterial({map:makeDiskTex(),side:THREE.DoubleSide,transparent:true,opacity:.95,depthWrite:false}));
+    disk.position.copy(hole.position);disk.rotation.x=Math.PI/2.3;scene.add(disk);
+    bhRim=new THREE.Mesh(new THREE.RingGeometry(30,37,64),
+      new THREE.MeshBasicMaterial({color:0xf0d8ff,side:THREE.DoubleSide,transparent:true,opacity:.7,blending:THREE.AdditiveBlending,depthWrite:false}));
+    bhRim.position.copy(hole.position);bhRim.rotation.x=Math.PI/2.3;scene.add(bhRim);
+    const glow=glowSprite('#a040ff',600);glow.position.copy(hole.position);scene.add(glow);
+    sys.planets.forEach(p=>{
+      const m=new THREE.Mesh(new THREE.TorusGeometry(70,2.5,12,80),
+        new THREE.MeshBasicMaterial({color:0x8a4aff,transparent:true,opacity:.5}));
+      m.position.set(sx,sy,sz);scene.add(m);
+      planetObjs.push({data:p,mesh:m,angle:Math.random()*7,starPos:new THREE.Vector3(sx,sy,sz),dist:0,orbitR:70,orbitSpeed:.4,spin:.002,isTorus:true});
+      p.labelEl=addLabel('☉ '+p.name);
+    });
+    return;
+  }
+  const isSun=sys.star==='Matahari';
+  const star=new THREE.Mesh(new THREE.SphereGeometry(isSun?26:18,SEG,SEG),
+    isSun?new THREE.MeshBasicMaterial({map:makeSunTex()}):new THREE.MeshBasicMaterial({color:sys.starColor}));
+  star.position.set(sx,sy,sz);scene.add(star);
+  const g=glowSprite('#'+new THREE.Color(sys.starColor).getHexString(),isSun?420:260);
+  g.position.copy(star.position);scene.add(g);
+  if(isSun){sunMesh=star;sunGlow=g;sunGlow.userData.base=420;sunLight.position.copy(star.position);}
+  else if(QUALITY!=='hemat'){const l=new THREE.PointLight(sys.starColor,1500,2500,1.6);l.position.copy(star.position);scene.add(l);}
+  sys.planets.forEach(p=>{
+    const tex=makeTex(p);
+    const mat=p.type==='earth'
+      ?new THREE.MeshPhongMaterial({map:tex,specular:new THREE.Color(0x2a5577),shininess:24}) // samudra berkilau
+      :new THREE.MeshStandardMaterial({map:tex,roughness:.92,metalness:.04});
+    const mesh=new THREE.Mesh(new THREE.SphereGeometry(p.r,PSEG,Math.max(20,PSEG-8)),mat);
+    mesh.rotation.z=TILT[p.name]!==undefined?TILT[p.name]:.2; // kemiringan sumbu (Uranus 98°!)
+    // orbit ring
+    const ring=new THREE.Mesh(new THREE.RingGeometry(p.dist-1,p.dist+1,QUALITY==='hemat'?64:128),
+      new THREE.MeshBasicMaterial({color:0x3a5a9a,transparent:true,opacity:.35,side:THREE.DoubleSide}));
+    ring.rotation.x=Math.PI/2;ring.position.set(sx,sy,sz);scene.add(ring);
+    scene.add(mesh);
+    if(p.type==='earth'||p.name==='Venus') mesh.add(atmosphereMesh(p.r,new THREE.Color(p.type==='earth'?'#3a9aff':'#ffca7a')));
+    let clouds=null;
+    if(p.type==='earth'){ // lapisan awan terpisah, berputar sendiri
+      clouds=new THREE.Mesh(new THREE.SphereGeometry(p.r*1.045,24,18),
+        new THREE.MeshStandardMaterial({map:makeCloudTex(),transparent:true,opacity:.9,depthWrite:false}));
+      mesh.add(clouds);
+    }
+    if(p.ring){
+      const rt=makeRingTex();
+      const rm=new THREE.Mesh(new THREE.RingGeometry(p.r*1.35,p.r*2.3,QUALITY==='hemat'?64:96),
+        new THREE.MeshBasicMaterial({map:rt,side:THREE.DoubleSide,transparent:true,opacity:.95}));
+      rm.rotation.x=Math.PI/2.4;mesh.add(rm);
+    }
+    p.labelEl=addLabel(p.name);
+    planetObjs.push({data:p,mesh,clouds,angle:Math.random()*Math.PI*2,starPos:new THREE.Vector3(sx,sy,sz),dist:p.dist,orbitR:p.dist,orbitSpeed:p.speed*.25,spin:.003+Math.random()*.003});
+  });
+});
+// sabuk asteroid antara Mars & Jupiter
+(function(){
+  const n=QUALITY==='hemat'?800:2200,pos=new Float32Array(n*3);
+  for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,r=335+Math.random()*45;
+    pos[i*3]=Math.cos(a)*r;pos[i*3+1]=(Math.random()-.5)*14;pos[i*3+2]=Math.sin(a)*r;}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x9a8a7a,map:dotTex,size:2.4,transparent:true,depthWrite:false})));
+})();
+
+/* ============ ROKET NUSANTARA-1 (bodi lathe + sirip delta) ============ */
+const rocket=new THREE.Group();
+let navL=null,navR=null;
+(function(){
+  const white=new THREE.MeshStandardMaterial({color:0xe8eef5,roughness:.32,metalness:.65});
+  const red=new THREE.MeshStandardMaterial({color:0xd8222a,roughness:.38,metalness:.45});
+  const dark=new THREE.MeshStandardMaterial({color:0x222a36,roughness:.45,metalness:.85});
+  const steel=new THREE.MeshStandardMaterial({color:0x8a94a5,roughness:.3,metalness:.9});
+  const SEG_R=QUALITY==='hemat'?20:32;
+  // badan bawah putih (profil melengkung)
+  const lowPts=[[0,-5.5],[1.5,-5.5],[2.05,-4.6],[2.2,-3.4],[2.2,2.6],[2.05,3.1]].map(p=>new THREE.Vector2(p[0],p[1]));
+  rocket.add(new THREE.Mesh(new THREE.LatheGeometry(lowPts,SEG_R),white));
+  // hidung merah melengkung
+  const nosePts=[[2.05,3.1],[1.9,4.2],[1.4,5.4],[.7,6.4],[0,7.0]].map(p=>new THREE.Vector2(p[0],p[1]));
+  rocket.add(new THREE.Mesh(new THREE.LatheGeometry(nosePts,SEG_R),red));
+  // garis panel baja
+  for(const py of [-3.4,2.6]){
+    const t=new THREE.Mesh(new THREE.TorusGeometry(2.21,.07,8,SEG_R),steel);
+    t.rotation.x=Math.PI/2;t.position.y=py;rocket.add(t);
+  }
+  // jendela kokpit + bingkai
+  const winMat=new THREE.MeshStandardMaterial({color:0x0a1e30,roughness:.08,metalness:1,emissive:0x2a6aaa,emissiveIntensity:.9});
+  const win=new THREE.Mesh(new THREE.SphereGeometry(1.05,20,16),winMat);
+  win.position.set(0,1.6,1.95);win.scale.set(1,.85,.45);rocket.add(win);
+  const frame=new THREE.Mesh(new THREE.TorusGeometry(1.02,.12,10,24),steel);
+  frame.position.set(0,1.6,2.0);frame.scale.set(1,.85,1);rocket.add(frame);
+  // sirip delta tersampir (extrude)
+  const fs=new THREE.Shape();
+  fs.moveTo(0,0);fs.lineTo(0,4.6);fs.lineTo(2.1,.4);fs.lineTo(2.1,0);fs.lineTo(0,0);
+  const finGeo=new THREE.ExtrudeGeometry(fs,{depth:.32,bevelEnabled:true,bevelThickness:.06,bevelSize:.06,bevelSegments:1});
+  finGeo.translate(0,0,-.16);
+  for(let i=0;i<3;i++){
+    const f=new THREE.Mesh(finGeo,red);
+    const a=i/3*Math.PI*2;
+    f.rotation.y=-a+Math.PI/2;
+    f.position.set(Math.cos(a)*1.9,-5.2,Math.sin(a)*1.9);
+    rocket.add(f);
+  }
+  // tiga bel nosel + cakram api
+  for(let i=0;i<3;i++){
+    const n=new THREE.Mesh(new THREE.CylinderGeometry(.62,.95,1.7,14),dark);
+    const a=i/3*Math.PI*2+.5;n.position.set(Math.cos(a)*1.05,-6.2,Math.sin(a)*1.05);rocket.add(n);
+    const gd=new THREE.Mesh(new THREE.CircleGeometry(.55,14),
+      new THREE.MeshBasicMaterial({color:0xffc46a}));
+    gd.rotation.x=Math.PI/2;gd.position.set(Math.cos(a)*1.05,-7.05,Math.sin(a)*1.05);rocket.add(gd);
+  }
+  // lampu navigasi kiri-merah / kanan-hijau (berkedip di loop)
+  const mkLamp=(color,px)=>{
+    const l=new THREE.Mesh(new THREE.SphereGeometry(.26,10,8),
+      new THREE.MeshBasicMaterial({color}));
+    l.position.set(px,-3.2,0);rocket.add(l);return l;
+  };
+  navL=mkLamp(0xff2222,-2.35);navR=mkLamp(0x22ff66,2.35);
+  // bendera
+  const flag=document.createElement('canvas');flag.width=128;flag.height=80;
+  const fx=flag.getContext('2d');fx.fillStyle='#e00';fx.fillRect(0,0,128,80);fx.fillStyle='#fff';fx.fillRect(0,0,128,40);
+  const ft=new THREE.CanvasTexture(flag);
+  const flagM=new THREE.Mesh(new THREE.PlaneGeometry(2.6,1.6),new THREE.MeshBasicMaterial({map:ft,side:THREE.DoubleSide}));
+  flagM.position.set(0,-1,2.24);rocket.add(flagM);
+})();
+const flame=glowSprite('#55aaff',14);flame.position.y=-8;flame.material.opacity=.55;rocket.add(flame);
+const flameCore=glowSprite('#ffffff',7);flameCore.position.y=-8.5;flameCore.material.opacity=.8;rocket.add(flameCore);
+const engineLight=new THREE.PointLight(0x55aaff,.8,60,1.5);engineLight.position.y=-8;rocket.add(engineLight);
+scene.add(rocket);
+
+// partikel knalpot (hemat di tablet)
+const EXH_N=QUALITY==='hemat'?150:400;
+const exhPos=new Float32Array(EXH_N*3),exhVel=[];
+for(let i=0;i<EXH_N;i++){exhPos[i*3+1]=-9999;exhVel.push(new THREE.Vector3());}
+const exhGeo=new THREE.BufferGeometry();exhGeo.setAttribute('position',new THREE.BufferAttribute(exhPos,3));
+const exhaust=new THREE.Points(exhGeo,new THREE.PointsMaterial({color:0x77c4ff,map:dotTex,size:2.2,transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false}));
+exhaust.frustumCulled=false; // posisi dinamis tiap frame, jangan di-culling
+scene.add(exhaust);
+let exhIdx=0;
+function spawnExhaust(worldPos,spread,life){
+  const i=exhIdx=(exhIdx+1)%EXH_N;
+  exhPos[i*3]=worldPos.x+(Math.random()-.5)*spread;
+  exhPos[i*3+1]=worldPos.y+(Math.random()-.5)*spread;
+  exhPos[i*3+2]=worldPos.z+(Math.random()-.5)*spread;
+  exhVel[i].set((Math.random()-.5)*4,(Math.random()-.5)*4-6,(Math.random()-.5)*4);
+  exhGeo.attributes.position.needsUpdate=true;
+}
+
+/* ============ STATE & KONTROL ============ */
+const state={
+  started:false, vel:new THREE.Vector3(), throttle:0, fuel:100, hull:100, boost:100,
+  camMode:0, targetIdx:3, visited:new Set(), warping:0, warpFrom:new THREE.Vector3(), warpTo:new THREE.Vector3(),
+  yaw:0, pitch:1.5, roll:0, keys:{}, dragging:false, px:0, py:0,
+  camYaw:0, camPitch:0, // arah pandang dunia (bebas, tidak ikut haluan roket)
+  follow:true // mode ikuti kamera: haluan roket mengejar arah pandang
+};
+rocket.position.set(0,40,230+60); // dekat Bumi
+
+const toast=(m,ms=2200)=>{const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',ms);};
+
+function cycleCam(){state.camMode=(state.camMode+1)%3;state.camYaw=0;state.camPitch=0;document.getElementById('camTxt').textContent=['KEJAR','KOKPIT','BEBAS'][state.camMode];}
+// normalisasi sudut (bukan batasan): nilai tetap di [-π,π] tapi orientasi bebas 360°
+function wrapAngle(a){return Math.atan2(Math.sin(a),Math.cos(a));}
+function updateFollowUI(){
+  const on=state.follow;
+  const badge=document.getElementById('followBadge');
+  badge.textContent=on?'🛰️ IKUTI KAMERA: ON':'👁️ KAMERA BEBAS';
+  badge.style.opacity=on?1:.5;
+  const b=document.getElementById('tFollow');
+  if(b){b.textContent=on?'IKUTI ON':'IKUTI OFF';b.style.background=on?'#0a6a3a':'';}
+}
+function toggleFollow(){
+  state.follow=!state.follow;updateFollowUI();
+  toast(state.follow?'🛰️ Roket MENGIKUTI kamera — arahkan pandangan untuk belok':'👁️ Kamera bebas — roket & pandangan terpisah (V untuk kembali)');
+}
+function brake(){state.throttle=0;state.vel.multiplyScalar(.25);if(window.__touchMove){window.__touchMove.x=window.__touchMove.y=0;}toast('🛑 Rem darurat');}
+
+addEventListener('keydown',e=>{
+  if(['Space','Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+  state.keys[e.code]=true;
+  if(e.code==='Tab')cycleTarget(1);
+  if(e.code==='Enter')startWarp();
+  if(e.code==='KeyC'&&!e.repeat)cycleCam();
+  if(e.code==='KeyV'&&!e.repeat)toggleFollow();
+  if(e.code==='KeyX'&&!e.repeat)brake();
+  if(e.code==='KeyG'&&!e.repeat)toggleMap();
+  if(e.code==='Escape'&&document.getElementById('galaxyMap').classList.contains('open'))toggleMap();
+});
+addEventListener('keyup',e=>state.keys[e.code]=false);
+// scroll mouse = gas throttle (optimal untuk presisi)
+addEventListener('wheel',e=>{
+  if(!state.started)return;
+  if(document.getElementById('galaxyMap').classList.contains('open'))return;
+  state.throttle=Math.max(-.4,Math.min(1,state.throttle-e.deltaY*.0009));
+},{passive:true});
+renderer.domElement.addEventListener('mousedown',e=>{state.dragging=true;state.px=e.clientX;state.py=e.clientY;});
+addEventListener('mouseup',()=>state.dragging=false);
+// Drag = LIHAT BEBAS (hanya menggeser kamera, roket tetap haluannya)
+// Swipe/geser ke atas = mendongak, geser ke bawah = menunduk
+addEventListener('mousemove',e=>{
+  if(!state.dragging||!state.started)return;
+  state.camYaw-=(e.clientX-state.px)*.004;
+  state.camPitch+=(e.clientY-state.py)*.004;
+  state.camYaw=wrapAngle(state.camYaw);
+  state.camPitch=wrapAngle(state.camPitch);
+  state.px=e.clientX;state.py=e.clientY;
+});
+// Double-click = reset pandangan ke depan
+renderer.domElement.addEventListener('dblclick',()=>{state.camYaw=0;state.camPitch=0;toast('👁️ Pandangan kembali ke depan');});
+// sentuh: 1 jari drag = bidik kamera, joystick = bidik (IKUTI) / setir (BEBAS), tombol = gas/boost/warp
+(function(){
+  let lookId=null,lx=0,ly=0;
+  const el=renderer.domElement;
+  el.addEventListener('touchstart',e=>{
+    for(const t of e.changedTouches){
+      if(t.clientX>innerWidth*.35&&lookId===null){lookId=t.identifier;lx=t.clientX;ly=t.clientY;}
+    }
+    // double-tap di area pandang = reset pandangan
+    if(e.changedTouches.length===1){
+      const n=performance.now();
+      if(n-(window.__lastTap||0)<320){state.camYaw=0;state.camPitch=0;window.__lastTap=0;}
+      else window.__lastTap=n;
+    }
+  },{passive:true});
+  el.addEventListener('touchmove',e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===lookId&&state.started){
+        // swipe atas = mendongak, swipe bawah = menunduk (searah jari)
+        state.camYaw-=(t.clientX-lx)*.006;
+        state.camPitch+=(t.clientY-ly)*.006;
+        state.camYaw=wrapAngle(state.camYaw);
+        state.camPitch=wrapAngle(state.camPitch);
+        lx=t.clientX;ly=t.clientY;
+      }
+    }
+    if(state.started)e.preventDefault();
+  },{passive:false});
+  el.addEventListener('touchend',e=>{for(const t of e.changedTouches)if(t.identifier===lookId)lookId=null;},{passive:true});
+  // joystick kiri
+  const joy=document.getElementById('joy'),stick=document.getElementById('stick');
+  let joyId=null;const touch={x:0,y:0};
+  window.__touchMove=touch;
+  const setStick=(dx,dy)=>{stick.style.transform=`translate(${dx}px,${dy}px)`;};
+  joy.addEventListener('touchstart',e=>{e.preventDefault();joyId=e.changedTouches[0].identifier;},{passive:false});
+  addEventListener('touchmove',e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier===joyId){
+        const r=joy.getBoundingClientRect();
+        let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height/2);
+        const m=Math.hypot(dx,dy),max=40;
+        if(m>max){dx*=max/m;dy*=max/m;}
+        setStick(dx,dy);touch.x=dx/max;touch.y=-dy/max;
+      }
+    }
+  },{passive:true});
+  const endJoy=e=>{for(const t of e.changedTouches)if(t.identifier===joyId){joyId=null;touch.x=touch.y=0;setStick(0,0);}};
+  addEventListener('touchend',endJoy);addEventListener('touchcancel',endJoy);
+  const hold=(id,code)=>{
+    const b=document.getElementById(id);
+    b.addEventListener('touchstart',e=>{e.preventDefault();state.keys[code]=true;},{passive:false});
+    b.addEventListener('touchend',e=>{e.preventDefault();state.keys[code]=false;},{passive:false});
+  };
+  hold('tUp','KeyW');hold('tDown','KeyS');hold('tBoost','Space');
+  document.getElementById('tWarp').addEventListener('touchstart',e=>{e.preventDefault();startWarp();},{passive:false});
+  document.getElementById('tBrake').addEventListener('touchstart',e=>{e.preventDefault();brake();},{passive:false});
+  document.getElementById('tCam').addEventListener('touchstart',e=>{e.preventDefault();cycleCam();},{passive:false});
+  document.getElementById('tFollow').addEventListener('touchstart',e=>{e.preventDefault();toggleFollow();},{passive:false});
+  document.getElementById('tTarget').addEventListener('touchstart',e=>{e.preventDefault();cycleTarget(1);},{passive:false});
+  document.getElementById('tMap').addEventListener('touchstart',e=>{e.preventDefault();toggleMap();},{passive:false});
+})();
+document.getElementById('btnQuality').onclick=function(){
+  QUALITY=QUALITY==='hemat'?'full':'hemat';
+  this.textContent=QUALITY==='hemat'?'⚙️ HEMAT: ON':'⚙️ FULL: ON';
+  applyPixelRatio();
+  toast(QUALITY==='hemat'?'Mode HEMAT: resolusi diturunkan agar 60fps di tablet':'Mode FULL: kualitas maksimal');
+};
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+// hemat baterai: pause saat tab disembunyikan
+let hidden=false;
+document.addEventListener('visibilitychange',()=>{hidden=document.hidden;if(AC&&AC.suspend&&hidden)AC.suspend();if(AC&&AC.resume&&!hidden&&state.started)AC.resume();});
+
+function cycleTarget(d){
+  state.targetIdx=(state.targetIdx+d+ALL_PLANETS.length)%ALL_PLANETS.length;
+  refreshTargetUI();
+  if(document.getElementById('galaxyMap').classList.contains('open'))renderPlanetList();
+}
+function targetObj(){return planetObjs[state.targetIdx];}
+function refreshTargetUI(){
+  const p=ALL_PLANETS[state.targetIdx];
+  document.getElementById('tName').textContent='🎯 TARGET: '+p.name.toUpperCase();
+  document.getElementById('tDesc').textContent=p.star+' — '+p.desc;
+}
+
+/* warp */
+const speedlines=document.getElementById('speedlines');
+function startWarp(){
+  if(state.warping>0||state.boost<25){toast(state.boost<25?'⚠️ Boost belum siap, tunggu mengisi!':'Sudah warp...');return;}
+  const t=targetObj().mesh.getWorldPosition(new THREE.Vector3());
+  const dir=t.clone().sub(rocket.position);const d=dir.length();
+  if(d<80){toast('Sudah sangat dekat dengan target!');return;}
+  state.warping=.0001;state.boost-=25;
+  state.warpFrom.copy(rocket.position);
+  state.warpTo.copy(t).add(dir.normalize().multiplyScalar(-(targetObj().data.r+35)));
+  document.getElementById('warpFlash').style.opacity=.9;
+  setTimeout(()=>document.getElementById('warpFlash').style.opacity=0,350);
+  toast('⚡ WARP DRIVE ke '+targetObj().data.name+'!');
+  if(document.getElementById('galaxyMap').classList.contains('open'))toggleMap();
+}
+
+/* ============ PETA GALAKSI ============ */
+const mapCanvas=document.getElementById('mapCanvas'),mctx=mapCanvas.getContext('2d');
+function worldToMap(v){ // dunia ±9000 -> 480px
+  return [240+v.x/9000*220, 240+v.z/9000*220];
+}
+const mapV=new THREE.Vector3(); // reuse agar drawMap tidak alokasi per planet
+function drawMap(){
+  mctx.clearRect(0,0,480,480);
+  // spiral
+  mctx.save();mctx.translate(240,240);
+  for(let arm=0;arm<2;arm++)for(let i=0;i<400;i++){
+    const t=i/400*Math.PI*3.2+arm*Math.PI;
+    const r=12+i/400*190;
+    mctx.fillStyle=`rgba(${arm?120:255},${arm?160:220},255,${.12+Math.random()*.25})`;
+    mctx.fillRect(Math.cos(t)*r+(Math.random()-.5)*16,Math.sin(t)*r+(Math.random()-.5)*16,2.4,2.4);
+  }
+  mctx.restore();
+  const grd=mctx.createRadialGradient(240,240,0,240,240,60);
+  grd.addColorStop(0,'rgba(220,180,255,.9)');grd.addColorStop(1,'rgba(120,60,255,0)');
+  mctx.fillStyle=grd;mctx.beginPath();mctx.arc(240,240,55,0,7);mctx.fill();
+  mctx.fillStyle='#fff';mctx.font='11px sans-serif';mctx.fillText('Sgr A* (Pusat)',248,248);
+  // roket
+  const [rx,ry]=worldToMap(rocket.position);
+  mctx.fillStyle='#00ff88';mctx.beginPath();mctx.arc(rx,ry,5,0,7);mctx.fill();
+  mctx.fillStyle='#00ff88';mctx.fillText('🚀 KAMU',rx+8,ry);
+  // target + planet
+  planetObjs.forEach((o,i)=>{
+    const wp=o.mesh.getWorldPosition(mapV);
+    const [x,y]=worldToMap(wp);
+    const isT=i===state.targetIdx, vis=state.visited.has(o.data.name);
+    mctx.beginPath();mctx.arc(x,y,isT?7:4,0,7);
+    mctx.fillStyle=isT?'#ffca28':vis?'#00e676':'#7dc4ff';mctx.fill();
+    if(isT){mctx.strokeStyle='#ffca28';mctx.lineWidth=2;mctx.beginPath();mctx.arc(x,y,11+Math.sin(Date.now()/300)*2,0,7);mctx.stroke();}
+    o._mapX=x;o._mapY=y;
+    if(isT||o.data.r>15){mctx.fillStyle=isT?'#ffca28':'#9fc4ff';mctx.font=(isT?'bold ':'')+'11px sans-serif';mctx.fillText(o.data.name,x+9,y+3);}
+  });
+}
+mapCanvas.addEventListener('click',e=>{
+  const r=mapCanvas.getBoundingClientRect();
+  const mx=(e.clientX-r.left)*480/r.width,my=(e.clientY-r.top)*480/r.height;
+  let best=-1,bd=1e9;
+  planetObjs.forEach((o,i)=>{const d=Math.hypot((o._mapX||0)-mx,(o._mapY||0)-my);if(d<bd){bd=d;best=i;}});
+  if(best>=0&&bd<40){state.targetIdx=best;refreshTargetUI();renderPlanetList();toast('🎯 Target: '+ALL_PLANETS[best].name);}
+});
+function renderPlanetList(){
+  const el=document.getElementById('planetList');el.innerHTML='';
+  document.getElementById('mapCount').textContent=ALL_PLANETS.length+' PLANET / '+SYSTEMS.length+' SISTEM';
+  ALL_PLANETS.forEach((p,i)=>{
+    const d=document.createElement('div');
+    d.className='pItem'+(i===state.targetIdx?' active':'');
+    d.innerHTML=`<div class="dot" style="background:${p.color1};color:${p.color1}"></div><div><b>${state.visited.has(p.name)?'✅ ':''}${p.name}</b><small>${p.star} • ${p.desc.slice(0,60)}...</small></div>`;
+    d.onclick=()=>{state.targetIdx=i;refreshTargetUI();renderPlanetList();};
+    d.ondblclick=startWarp;
+    el.appendChild(d);
+  });
+}
+function toggleMap(){
+  const m=document.getElementById('galaxyMap');
+  m.classList.toggle('open');
+  if(m.classList.contains('open')){renderPlanetList();}
+}
+document.getElementById('btnMap').onclick=toggleMap;
+document.getElementById('btnCloseMap').onclick=toggleMap;
+document.getElementById('btnWarp').onclick=startWarp;
+document.getElementById('btnWarp2').onclick=startWarp;
+// lepas fokus tombol setelah diklik: cegah Enter/Space memicu warp dobel
+document.querySelectorAll('.btn').forEach(b=>b.addEventListener('click',()=>b.blur()));
+
+/* ============ AUDIO mesin ============ */
+let AC=null,osc=null,oscGain=null;
+function initAudio(){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended')AC.resume();
+    if(osc)return;
+    osc=AC.createOscillator();oscGain=AC.createGain();
+    osc.type='sawtooth';osc.frequency.value=40;oscGain.gain.value=0;
+    const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=300;
+    osc.connect(f);f.connect(oscGain);oscGain.connect(AC.destination);osc.start();
+  }catch(e){}
+}
+
+/* ============ LOOP ============ */
+const clock=new THREE.Clock();
+const fwd=new THREE.Vector3();
+const tmpV=new THREE.Vector3(),tmpV2=new THREE.Vector3(),tmpV3=new THREE.Vector3(),nozzleW=new THREE.Vector3(),colV=new THREE.Vector3();
+const lookE=new THREE.Euler(0,0,0,'YXZ'),lookQ=new THREE.Quaternion(); // arah pandang dunia
+const flightDir=new THREE.Vector3(0,0,1); // arah terbang = arah pandang (diisi tiap frame)
+const marker=document.getElementById('marker'),markerTxt=document.getElementById('markerTxt');
+
+document.getElementById('btnStart').onclick=()=>{
+  document.getElementById('start').style.display='none';
+  state.started=true;initAudio();
+  toast('🚀 Selamat terbang, Kapten! Dekati MARS atau buka PETA [G]');
+  refreshTargetUI();renderPlanetList();
+};
+// Mobile Safari sering men-suspend AudioContext — resume saat sentuhan pertama
+addEventListener('touchstart',function resumeAC(){if(AC&&AC.state==='suspended')AC.resume();},{passive:true});
+refreshTargetUI();
+document.getElementById('missionTxt').textContent=`0 / ${ALL_PLANETS.length} planet`;
+updateFollowUI();
+
+// suara + posisi awal kamera
+camera.position.set(0,50,320);
+
+function update(dt){
+  const k=state.keys;
+  // joystick tablet: mode IKUTI = membidik kamera (roket mengejar), mode BEBAS = menyetir roket langsung
+  const tm=window.__touchMove||{x:0,y:0};
+  if(Math.abs(tm.x)>.12){
+    if(state.follow)state.camYaw=wrapAngle(state.camYaw-tm.x*2.2*dt);
+    else state.yaw-=tm.x*1.8*dt;
+  }
+  if(Math.abs(tm.y)>.15){
+    if(state.follow)state.camPitch=wrapAngle(state.camPitch-tm.y*1.8*dt);
+    else state.pitch=Math.max(-2.6,Math.min(2.6,state.pitch+tm.y*1.4*dt));
+  }
+  // orientasi roket: A/D belok banking (yaw + roll), panah juga bisa
+  if(k['KeyA']||k['ArrowLeft']){state.yaw+=1.7*dt;state.roll=Math.min(.9,state.roll+.9*dt);}
+  if(k['KeyD']||k['ArrowRight']){state.yaw-=1.7*dt;state.roll=Math.max(-.9,state.roll-.9*dt);}
+  if(k['KeyR']||k['ArrowUp'])state.pitch=Math.min(2.6,state.pitch+1.2*dt);
+  if(k['KeyF']||k['ArrowDown'])state.pitch=Math.max(-2.6,state.pitch-1.2*dt);
+  if(k['KeyQ'])state.roll+=1.8*dt;
+  if(k['KeyE'])state.roll-=1.8*dt;
+  rocket.rotation.set(0,0,0);
+  rocket.rotateY(state.yaw);rocket.rotateX(state.pitch);rocket.rotateZ(state.roll);
+
+  // MODE IKUTI KAMERA: haluan roket mengejar arah pandang (atas/bawah/kiri/kanan).
+  // flightDir dihitung world-frame di blok kamera (frame sebelumnya) sehingga stabil,
+  // tidak ikut berputar bersama roket — tidak ada feedback loop.
+  if(state.follow&&state.warping===0){
+    const desP=Math.max(-2.6,Math.min(2.6,Math.acos(Math.max(-1,Math.min(1,flightDir.y)))));
+    const f=Math.min(1,dt*3);
+    if(Math.abs(Math.sin(desP))>.12){
+      let dy=Math.atan2(flightDir.x,flightDir.z)-state.yaw;
+      while(dy>Math.PI)dy-=Math.PI*2;while(dy<-Math.PI)dy+=Math.PI*2;
+      state.yaw+=dy*f;
+    }
+    state.pitch+=(desP-state.pitch)*f;
+    if(!k['KeyQ']&&!k['KeyE'])state.roll*=(1-Math.min(1,dt*.8)); // level otomatis
+    rocket.rotation.set(0,0,0);
+    rocket.rotateY(state.yaw);rocket.rotateX(state.pitch);rocket.rotateZ(state.roll);
+  }
+
+  // Model roket menghadap +Y; arah maju = sumbu Y lokal
+  fwd.set(0,1,0).applyQuaternion(rocket.quaternion);
+
+  // throttle (keyboard ▲▼ sentuh; joystick kini khusus arah)
+  let thrust=0;
+  if(k['KeyW']){state.throttle=Math.min(1,state.throttle+dt*.8);thrust=1;}
+  else if(k['KeyS']){state.throttle=Math.max(-.4,state.throttle-dt*.8);thrust=-.5;}
+  else{state.throttle*=(1-dt*.6);}
+  const boosting=k['Space']&&state.boost>0&&state.fuel>0;
+  if(boosting){state.boost=Math.max(0,state.boost-dt*28);state.fuel=Math.max(0,state.fuel-dt*4);}
+  else{state.boost=Math.min(100,state.boost+dt*10);}
+
+  const ACCEL=boosting?160:55;
+  if(state.fuel<=0)thrust=0;
+  else if(thrust!==0)state.fuel=Math.max(0,state.fuel-Math.abs(state.throttle)*dt*(boosting?2:0.55));
+  let bhD=1e9; // agar bisa dipakai cek tabrakan lubang hitam di bawah
+
+  if(state.warping>0){
+    // animasi warp 3 detik
+    state.warping+=dt/3;
+    speedlines.style.opacity=1;
+    rocket.position.lerpVectors(state.warpFrom,state.warpTo,Math.min(1,state.warping));
+    state.vel.set(0,0,0);
+    flame.scale.set(16,16,1);
+    if(state.warping>=1){state.warping=0;speedlines.style.opacity=0;toast('✅ Tiba di '+targetObj().data.name);}
+  } else {
+    speedlines.style.opacity=boosting?1:0;
+    if(thrust!==0){
+      tmpV.copy(fwd).multiplyScalar(state.throttle*ACCEL*dt*(boosting?3:1));
+      state.vel.add(tmpV);
+    }
+    // gravitasi ringan tiap bintang
+    SYSTEMS.forEach(s=>{
+      if(s.isBlackHole)return;
+      tmpV.set(s.starPos[0],s.starPos[1],s.starPos[2]).sub(rocket.position);
+      const d=tmpV.length();
+      if(d<1200&&d>30)state.vel.add(tmpV.normalize().multiplyScalar((s.star==='Matahari'?900:400)/ (d*d) *dt*60));
+    });
+    // lubang hitam menyedot!
+    tmpV.set(0,0,-9000).sub(rocket.position);
+    bhD=tmpV.length();
+    if(bhD<1500)state.vel.add(tmpV.normalize().multiplyScalar(9000/(bhD*bhD)*dt*120));
+    state.vel.multiplyScalar(1-dt*.12); // drag antariksa kecil
+    const spd=state.vel.length();
+    const maxSp=boosting?420:150;
+    if(spd>maxSp)state.vel.multiplyScalar(maxSp/spd);
+    rocket.position.addScaledVector(state.vel,dt);
+  }
+
+  // orbit planet
+  const t=clock.elapsedTime;
+  planetObjs.forEach(o=>{
+    if(o.isTorus){o.mesh.rotation.z+=dt*.3;return;}
+    if(o.dist>0){
+      o.angle+=o.orbitSpeed*dt*(o.data.name.includes('TRAPPIST')?2:1);
+      o.mesh.position.set(o.starPos.x+Math.cos(o.angle)*o.orbitR, o.starPos.y, o.starPos.z+Math.sin(o.angle)*o.orbitR);
+    } else o.mesh.position.copy(o.starPos);
+    o.mesh.rotation.y+=o.spin*dt*10;
+    if(o.clouds)o.clouds.rotation.y+=dt*.07;
+  });
+  // kehidupan visual: matahari berputar + berdenyut, rim lubang hitam, lampu navigasi
+  if(sunMesh){sunMesh.rotation.y+=dt*.02;const s=1+Math.sin(t*.9)*.035;sunGlow.scale.set(420*s,420*s,1);}
+  if(bhRim)bhRim.material.opacity=.55+Math.sin(t*2.2)*.25;
+  if(navL){const bl=Math.sin(t*7)>0;navL.visible=bl;navR.visible=!bl;}
+
+  // knalpot
+  const spdNow=state.vel.length();
+  const flameOn=Math.abs(state.throttle)>.05||boosting||state.warping>0;
+  flame.visible=flameCore.visible=flameOn;
+  engineLight.intensity=flameOn?(boosting?1.6:.8):0;
+  const fs=(boosting?12:6)+Math.random()*2+Math.abs(state.throttle)*4;
+  if(flameOn){flame.scale.set(fs,fs*1.6,1);flameCore.scale.set(fs*.5,fs*.8,1);}
+  if(flameOn&&state.warping===0){
+    nozzleW.set(0,-7,0).applyMatrix4(rocket.matrixWorld);
+    const nSpawn=QUALITY==='hemat'?1:3;
+    for(let i=0;i<nSpawn;i++)spawnExhaust(nozzleW,2,1);
+  }
+  for(let i=0;i<EXH_N;i++){
+    if(exhPos[i*3+1]<-9000)continue;
+    exhPos[i*3]+=exhVel[i].x*dt;exhPos[i*3+1]+=exhVel[i].y*dt;exhPos[i*3+2]+=exhVel[i].z*dt;
+  }
+  exhGeo.attributes.position.needsUpdate=true;
+
+  // tabrakan / pindai planet (colV khusus agar tidak alias dengan wp)
+  let nearest='Luar Angkasa',nearestD=1e9;
+  const nowMs=performance.now();
+  planetObjs.forEach(o=>{
+    const wp=o.mesh.getWorldPosition(tmpV);
+    const d=wp.distanceTo(rocket.position);
+    if(d<nearestD){nearestD=d;nearest=o.data.name;}
+    const R=o.data.r;
+    if(d<R+4){
+      // menabrak keras (toast di-throttle 1.5 detik agar tidak spam)
+      if(spdNow>60){state.hull-=dt*30;if(nowMs-(state._colToast||0)>1500){state._colToast=nowMs;toast('💥 TABRAKAN! Perlambat!');}}
+      // pantulkan menjauhi pusat planet
+      colV.copy(rocket.position).sub(wp);
+      if(colV.lengthSq()<1e-6)colV.set(0,1,0);
+      colV.normalize();
+      rocket.position.copy(wp).addScaledVector(colV,R+4.5);
+      state.vel.reflect(colV).multiplyScalar(.3);
+    } else if(d<R+45&&!state.visited.has(o.data.name)){
+      state.visited.add(o.data.name);
+      document.getElementById('missionTxt').textContent=`${state.visited.size} / ${ALL_PLANETS.length} planet`;
+      toast(`🛰️ MEMINDAI ${o.data.name}: ${o.data.desc}`,4200);
+      state.fuel=Math.min(100,state.fuel+25); // isi ulang dari surya
+    }
+  });
+  if(nearestD<400)nearest+=' ↓';
+  document.getElementById('locTxt').textContent=nearestD<600?nearest:'Antariksa Dalam';
+  state.hull=Math.max(0,Math.min(100,state.hull));
+  state.fuel=Math.max(0,Math.min(100,state.fuel));
+  if(state.hull<=0){
+    state.hull=100;state.fuel=100;
+    const earth=(planetObjs.find(o=>o.data.name==='Bumi')||planetObjs[2]).mesh.getWorldPosition(tmpV2);
+    rocket.position.set(earth.x,earth.y+40,earth.z+50);
+    state.vel.set(0,0,0);state.throttle=0;
+    toast('🔧 Roket diperbaiki & kembali ke Bumi');
+  }
+  if(bhD<90){state.hull=Math.max(0,state.hull-dt*40);if(nowMs-(state._bhToast||0)>1500){state._bhToast=nowMs;toast('⚠️ LUBANG HITAM! KABUR!');}}
+
+  // kamera POV lebar, WORLD-FRAME: orientasi pandangan tidak ikut haluan roket,
+  // hanya posisinya yang mengikuti roket. flightDir = arah pandang = arah terbang.
+  const camBack=30,camUp=11;
+  lookE.set(state.camPitch,state.camYaw,0);lookQ.setFromEuler(lookE);
+  if(state.camMode===0){
+    // KEJAR: di belakang arah pandang, menatap ke jalur terbang
+    flightDir.set(0,0,1).applyQuaternion(lookQ);
+    tmpV.set(0,camUp,-camBack).applyQuaternion(lookQ).add(rocket.position);
+    camera.position.lerp(tmpV,1-Math.pow(.001,dt));
+    camera.lookAt(tmpV.copy(rocket.position).addScaledVector(flightDir,25));
+    camera.rotateZ(state.roll*.15);
+  } else if(state.camMode===1){
+    // KOKPIT: mata pilot menatap arah pandang dunia
+    tmpV.set(0,3.6,1).applyQuaternion(rocket.quaternion).add(rocket.position);
+    camera.position.copy(tmpV);
+    flightDir.set(0,0,1).applyQuaternion(lookQ);
+    tmpV.copy(camera.position).addScaledVector(flightDir,100);
+    camera.lookAt(tmpV);
+    camera.rotateZ(state.roll);
+  } else {
+    // BEBAS: orbit penuh mengitari roket, terbang ke arah frame orbit
+    flightDir.set(0,0,1).applyQuaternion(lookQ);
+    tmpV.set(0,20,-46).applyQuaternion(lookQ).add(rocket.position);
+    camera.position.lerp(tmpV,1-Math.pow(.01,dt));
+    camera.lookAt(rocket.position);
+  }
+  // FOV dinamis: melebar saat ngebut / boost / warp (efek kecepatan)
+  {
+    const spdNorm=Math.min(1,spdNow/((boosting?420:150)||1));
+    const targetFov=78+spdNorm*5+(boosting?5:0)+(state.warping>0?10:0);
+    if(Math.abs(camera.fov-targetFov)>.05){camera.fov+=(targetFov-camera.fov)*Math.min(1,dt*4);camera.updateProjectionMatrix();}
+  }
+
+  // audio
+  if(oscGain)oscGain.gain.value=Math.min(.12,Math.abs(state.throttle)*.08+(boosting?.1:0));
+
+  /* HUD (di-throttle agar hemat CPU tablet) */
+  state._hudT=(state._hudT||0)+dt;
+  const tp=targetObj().mesh.getWorldPosition(tmpV2);
+  const tdist=tp.distanceTo(rocket.position);
+  // marker layar (tiap frame, murah)
+  tmpV.copy(tp).project(camera);
+  if(tmpV.z<1&&Math.abs(tmpV.x)<1&&Math.abs(tmpV.y)<1){
+    marker.style.display='block';
+    marker.style.left=((tmpV.x*.5+.5)*innerWidth)+'px';
+    marker.style.top=((-tmpV.y*.5+.5)*innerHeight)+'px';
+    markerTxt.textContent=targetObj().data.name+' • '+(tdist|0)+' u';
+  } else marker.style.display='none';
+  if(state._hudT<.12)return; // update teks 8x/detik saja
+  state._hudT=0;
+  const kmh=Math.round(spdNow*36);
+  document.getElementById('speedNum').innerHTML=kmh+'<small>KM/S</small>';
+  document.getElementById('thrTxt').textContent=Math.round(state.throttle*100)+'%';
+  document.getElementById('thrFill').style.width=Math.abs(state.throttle*100)+'%';
+  document.getElementById('fuelTxt').textContent=Math.round(state.fuel)+'%';
+  document.querySelector('#fuelBar i').style.width=state.fuel+'%';
+  document.getElementById('hullTxt').textContent=Math.round(state.hull)+'%';
+  document.querySelector('#hullBar i').style.width=state.hull+'%';
+  document.getElementById('boostTxt').textContent=state.boost>=25?'READY':'CHARGING';
+  document.querySelector('#boostBar i').style.width=state.boost+'%';
+  document.getElementById('tDist').textContent=(tdist*12742/230|0).toLocaleString('id-ID')+' km';
+  // label planet dekat (pakai vektor reuse, tanpa alokasi; update tiap 3 frame)
+  state._lblT=(state._lblT||0)+1;
+  if(state._lblT%3===0)planetObjs.forEach(o=>{
+    const wp=o.mesh.getWorldPosition(tmpV3);
+    tmpV.copy(wp).project(camera);
+    const el=o.data.labelEl;
+    if(tmpV.z<1&&Math.abs(tmpV.x)<1&&Math.abs(tmpV.y)<1&&camera.position.distanceTo(wp)<2500){
+      el.style.display='block';
+      el.style.left=((tmpV.x*.5+.5)*innerWidth+14)+'px';
+      el.style.top=((-tmpV.y*.5+.5)*innerHeight-10)+'px';
+    } else el.style.display='none';
+  });
+  if(document.getElementById('galaxyMap').classList.contains('open'))drawMap();
+}
+
+function loop(){
+  requestAnimationFrame(loop);
+  if(hidden)return; // pause saat tab hidden -> hemat RAM/baterai
+  const dt=Math.min(clock.getDelta(),.05);
+  if(state.started)update(dt);
+  else{
+    // sinematik menu: roket mengorbit Bumi (tanpa alokasi per-frame)
+    const e=planetObjs.find(o=>o.data.name==='Bumi')||planetObjs[2];
+    if(e){const wp=e.mesh.getWorldPosition(tmpV2);
+      const a=clock.elapsedTime*.2;
+      rocket.position.set(wp.x+Math.cos(a)*40,wp.y+12,wp.z+Math.sin(a)*40);
+      rocket.lookAt(wp);rocket.rotateX(Math.PI/2);
+      camera.position.lerp(tmpV3.set(wp.x+Math.cos(a+.4)*90,wp.y+30,wp.z+Math.sin(a+.4)*90),.03);
+      camera.lookAt(rocket.position);
+      planetObjs.forEach(o=>{if(!o.isTorus&&o.dist>0){o.angle+=o.orbitSpeed*dt;o.mesh.position.set(o.starPos.x+Math.cos(o.angle)*o.orbitR,o.starPos.y,o.starPos.z+Math.sin(o.angle)*o.orbitR);}o.mesh.rotation.y+=.002;if(o.clouds)o.clouds.rotation.y+=.0012;});
+      flame.visible=true;flame.scale.set(5+Math.random()*1.5,9,1);
+    }
+  }
+  renderer.render(scene,camera);
+  // auto-degrade: jika FPS < 28 selama 3 detik di tablet, turunkan pixelRatio ke 1.0
+  state._fpsN=(state._fpsN||0)+1;state._fpsT=(state._fpsT||0)+dt;
+  if(state._fpsT>3){
+    const fps=state._fpsN/state._fpsT;state._fpsN=0;state._fpsT=0;
+    if(fps<28&&QUALITY==='hemat'&&renderer.getPixelRatio()>1.02){renderer.setPixelRatio(1);toast('📉 FPS rendah — resolusi otomatis diturunkan');}
+  }
+}
+loop();
+</script>
+</body>
+</html>
