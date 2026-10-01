@@ -91,6 +91,32 @@
     #speedo{bottom:220px;transform:scale(.85);transform-origin:bottom left}
     #mapCanvas{height:300px}
   }
+  /* HP portrait: HUD susun vertikal & kompak agar tak menutupi layar */
+  @media(max-width:700px) and (orientation:portrait){
+    #topbar{flex-direction:column;gap:8px}
+    #status{transform:scale(.78);min-width:240px}
+    #targetBox{transform:scale(.78);text-align:left;max-width:230px}
+    #targetBox>div:last-child{justify-content:flex-start !important}
+    #speedo{bottom:196px;transform:scale(.78);padding:8px 10px}
+    #followBadge{top:auto;bottom:192px;font-size:9px}
+    #joy{width:104px;height:104px;left:10px;bottom:66px}
+    #tBtns{grid-template-columns:repeat(2,56px);gap:8px;right:10px;bottom:66px}
+    #tBtns button{width:56px;height:56px;font-size:10px}
+    #tBtns .big{height:42px}
+    #toast{top:8px;font-size:11px;max-width:92vw;text-align:center}
+    #mapCanvas{height:260px}
+    #cross{display:none}
+  }
+  /* HP landscape pendek: hemat ruang vertikal */
+  @media(max-height:500px){
+    #status{transform:scale(.72);transform-origin:top left}
+    #targetBox{transform:scale(.72);transform-origin:top right}
+    #speedo{display:none}
+    #joy{width:96px;height:96px;bottom:10px}
+    #tBtns{grid-template-columns:repeat(4,52px);bottom:10px;gap:8px}
+    #tBtns button{width:52px;height:52px;font-size:10px}
+    #tBtns .big{grid-column:span 2;width:100%;height:40px}
+  }
 </style>
 <script type="importmap">
 {"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
@@ -141,10 +167,11 @@
     <kbd>W</kbd>/<kbd>S</kbd> gas/rem &nbsp;<kbd>A</kbd>/<kbd>D</kbd> belok banking &nbsp;<kbd>scroll</kbd> gas presisi<br>
     <kbd>R</kbd>/<kbd>F</kbd>/<kbd>↑</kbd><kbd>↓</kbd> pitch &nbsp;<kbd>←</kbd><kbd>→</kbd> belok &nbsp;<kbd>Q</kbd>/<kbd>E</kbd> roll<br>
     <kbd>X</kbd> rem darurat &nbsp;<kbd>SPACE</kbd> boost &nbsp;drag = lihat bebas<br>
-    <kbd>Tab</kbd> target &nbsp;<kbd>Enter</kbd> warp &nbsp;<kbd>C</kbd> kamera &nbsp;<kbd>V</kbd> ikuti kamera &nbsp;<kbd>G</kbd> peta &nbsp;dobel-klik = reset pandang
+    <kbd>Tab</kbd> target &nbsp;<kbd>Enter</kbd> warp &nbsp;<kbd>C</kbd> kamera &nbsp;<kbd>V</kbd> ikuti kamera &nbsp;<kbd>M</kbd> bisu &nbsp;<kbd>G</kbd> peta &nbsp;dobel-klik = reset pandang
   </div>
   <div style="position:absolute;left:12px;top:46%;display:flex;flex-direction:column;gap:8px">
     <button class="btn" id="btnQuality" style="padding:8px 10px;font-size:11px">⚙️ HEMAT: ON</button>
+    <button class="btn" id="btnMute" style="padding:8px 10px;font-size:11px">🔊 SUARA: ON</button>
   </div>
 </div>
 <div id="touchUI">
@@ -229,6 +256,8 @@ const IS_TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 const IS_MOBILE=IS_TOUCH||/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)||Math.min(screen.width,screen.height)<760;
 if(IS_TOUCH)document.body.classList.add('touch');
 let QUALITY=IS_MOBILE?'hemat':'full'; // hemat | full
+const LOW_MEM=navigator.deviceMemory&&navigator.deviceMemory<=4; // HP RAM kecil
+if(LOW_MEM)QUALITY='hemat'; // kunci hemat di HP RAM kecil
 const Q=()=>QUALITY==='hemat'?1:0;
 const container=document.getElementById('game');
 const scene=new THREE.Scene();
@@ -236,7 +265,7 @@ scene.background=new THREE.Color(0x01020a);
 const camera=new THREE.PerspectiveCamera(78,innerWidth/innerHeight,.1,120000);
 const renderer=new THREE.WebGLRenderer({antialias:!IS_MOBILE,powerPreference:'high-performance',stencil:false,depth:true});
 renderer.setSize(innerWidth,innerHeight);
-function applyPixelRatio(){renderer.setPixelRatio(QUALITY==='hemat'?Math.min(devicePixelRatio,1.25):Math.min(devicePixelRatio,2));}
+function applyPixelRatio(){renderer.setPixelRatio(QUALITY==='hemat'?Math.min(devicePixelRatio,LOW_MEM?1:1.25):Math.min(devicePixelRatio,2));}
 applyPixelRatio();
 container.appendChild(renderer.domElement);
 // sinematik: tone-mapping + filter anisotropik (tajam dari sudut miring, murah di GPU)
@@ -752,19 +781,20 @@ function updateFollowUI(){
   if(b){b.textContent=on?'IKUTI ON':'IKUTI OFF';b.style.background=on?'#0a6a3a':'';}
 }
 function toggleFollow(){
-  state.follow=!state.follow;updateFollowUI();
+  state.follow=!state.follow;updateFollowUI();Snd.blip(state.follow?900:500);
   toast(state.follow?'🛰️ Roket MENGIKUTI kamera — arahkan pandangan untuk belok':'👁️ Kamera bebas — roket & pandangan terpisah (V untuk kembali)');
 }
-function brake(){state.throttle=0;state.vel.multiplyScalar(.25);if(window.__touchMove){window.__touchMove.x=window.__touchMove.y=0;}toast('🛑 Rem darurat');}
+function brake(){state.throttle=0;state.vel.multiplyScalar(.25);Snd.noiseBurst(.25,.25,2000,200);if(window.__touchMove){window.__touchMove.x=window.__touchMove.y=0;}toast('🛑 Rem darurat');}
 
 addEventListener('keydown',e=>{
   if(['Space','Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
   state.keys[e.code]=true;
   if(e.code==='Tab')cycleTarget(1);
   if(e.code==='Enter')startWarp();
-  if(e.code==='KeyC'&&!e.repeat)cycleCam();
+  if(e.code==='KeyC'&&!e.repeat){cycleCam();Snd.blip(600);}
   if(e.code==='KeyV'&&!e.repeat)toggleFollow();
   if(e.code==='KeyX'&&!e.repeat)brake();
+  if(e.code==='KeyM'&&!e.repeat)toggleMute();
   if(e.code==='KeyG'&&!e.repeat)toggleMap();
   if(e.code==='Escape'&&document.getElementById('galaxyMap').classList.contains('open'))toggleMap();
 });
@@ -851,7 +881,9 @@ renderer.domElement.addEventListener('dblclick',()=>{state.camYaw=0;state.camPit
   document.getElementById('tMap').addEventListener('touchstart',e=>{e.preventDefault();toggleMap();},{passive:false});
 })();
 document.getElementById('btnQuality').onclick=function(){
+  if(LOW_MEM&&QUALITY==='hemat'){toast('📱 Kualitas dikunci HEMAT (RAM kecil)');return;}
   QUALITY=QUALITY==='hemat'?'full':'hemat';
+  Snd.blip(750);
   this.textContent=QUALITY==='hemat'?'⚙️ HEMAT: ON':'⚙️ FULL: ON';
   applyPixelRatio();
   toast(QUALITY==='hemat'?'Mode HEMAT: resolusi diturunkan agar 60fps di tablet':'Mode FULL: kualitas maksimal');
@@ -859,11 +891,11 @@ document.getElementById('btnQuality').onclick=function(){
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 // hemat baterai: pause saat tab disembunyikan
 let hidden=false;
-document.addEventListener('visibilitychange',()=>{hidden=document.hidden;if(AC&&AC.suspend&&hidden)AC.suspend();if(AC&&AC.resume&&!hidden&&state.started)AC.resume();});
+document.addEventListener('visibilitychange',()=>{hidden=document.hidden;if(!Snd.ctx)return;if(hidden)Snd.ctx.suspend();else if(state.started)Snd.resume();});
 
 function cycleTarget(d){
   state.targetIdx=(state.targetIdx+d+ALL_PLANETS.length)%ALL_PLANETS.length;
-  refreshTargetUI();
+  refreshTargetUI();Snd.blip(700);
   if(document.getElementById('galaxyMap').classList.contains('open'))renderPlanetList();
 }
 function targetObj(){return planetObjs[state.targetIdx];}
@@ -886,6 +918,7 @@ function startWarp(){
   document.getElementById('warpFlash').style.opacity=.9;
   setTimeout(()=>document.getElementById('warpFlash').style.opacity=0,350);
   toast('⚡ WARP DRIVE ke '+targetObj().data.name+'!');
+  Snd.warp();
   if(document.getElementById('galaxyMap').classList.contains('open'))toggleMap();
 }
 
@@ -947,9 +980,10 @@ function renderPlanetList(){
 }
 function toggleMap(){
   const m=document.getElementById('galaxyMap');
-  m.classList.toggle('open');
+  m.classList.toggle('open');Snd.blip(m.classList.contains('open')?500:400);
   if(m.classList.contains('open')){renderPlanetList();}
 }
+document.getElementById('btnMute').onclick=toggleMute;
 document.getElementById('btnMap').onclick=toggleMap;
 document.getElementById('btnCloseMap').onclick=toggleMap;
 document.getElementById('btnWarp').onclick=startWarp;
@@ -957,18 +991,91 @@ document.getElementById('btnWarp2').onclick=startWarp;
 // lepas fokus tombol setelah diklik: cegah Enter/Space memicu warp dobel
 document.querySelectorAll('.btn').forEach(b=>b.addEventListener('click',()=>b.blur()));
 
-/* ============ AUDIO mesin ============ */
-let AC=null,osc=null,oscGain=null;
-function initAudio(){
-  try{
-    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
-    if(AC.state==='suspended')AC.resume();
-    if(osc)return;
-    osc=AC.createOscillator();oscGain=AC.createGain();
-    osc.type='sawtooth';osc.frequency.value=40;oscGain.gain.value=0;
-    const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=300;
-    osc.connect(f);f.connect(oscGain);oscGain.connect(AC.destination);osc.start();
-  }catch(e){}
+/* ============ SUARA REALISTIS (100% prosedural WebAudio) ============ */
+const Snd={
+  ctx:null,master:null,eng:null,muted:false,
+  init(){
+    if(this.ctx)return;
+    try{
+      const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+      const ctx=this.ctx=new C();
+      const master=this.master=ctx.createGain();master.gain.value=.9;master.connect(ctx.destination);
+      // buffer derau cokelat 2 detik (rumble mesin diesel-roket)
+      const len=ctx.sampleRate*2,buf=ctx.createBuffer(1,len,ctx.sampleRate),ch=buf.getChannelData(0);
+      let last=0;
+      for(let i=0;i<len;i++){const w=Math.random()*2-1;last=(last+.02*w)/1.02;ch[i]=last*3.2;}
+      // 1) gemuruh knalpot (derau cokelat, berat di frekuensi rendah — inti suara roket)
+      const nSrc=ctx.createBufferSource();nSrc.buffer=buf;nSrc.loop=true;
+      const nFil=ctx.createBiquadFilter();nFil.type='lowpass';nFil.frequency.value=90;nFil.Q.value=.6;
+      const nGain=ctx.createGain();nGain.gain.value=0;
+      nSrc.connect(nFil);nFil.connect(nGain);nGain.connect(master);nSrc.start();
+      // 2) dengung sub (badan roket bergetar, 30–60 Hz)
+      const sub=ctx.createOscillator();sub.type='sawtooth';sub.frequency.value=32;
+      const subFil=ctx.createBiquadFilter();subFil.type='lowpass';subFil.frequency.value=160;
+      const subGain=ctx.createGain();subGain.gain.value=0;
+      sub.connect(subFil);subFil.connect(subGain);subGain.connect(master);sub.start();
+      // 3) krekle semburan (white noise + bandpass, dimodulasi kasar ~11 Hz ala roket asli)
+      const wlen=ctx.sampleRate, wbuf=ctx.createBuffer(1,wlen,ctx.sampleRate), wch=wbuf.getChannelData(0);
+      for(let i=0;i<wlen;i++)wch[i]=Math.random()*2-1;
+      const cSrc=ctx.createBufferSource();cSrc.buffer=wbuf;cSrc.loop=true;
+      const cFil=ctx.createBiquadFilter();cFil.type='bandpass';cFil.frequency.value=700;cFil.Q.value=.7;
+      const cGain=ctx.createGain();cGain.gain.value=0;
+      const lfo=ctx.createOscillator();lfo.type='square';lfo.frequency.value=11;
+      const lfo2=ctx.createOscillator();lfo2.type='square';lfo2.frequency.value=7.3;
+      const lfoAmt=ctx.createGain();lfoAmt.gain.value=.05;
+      lfo.connect(lfoAmt);lfo2.connect(lfoAmt);lfoAmt.connect(cGain.gain);
+      lfo.start();lfo2.start();
+      cSrc.connect(cFil);cFil.connect(cGain);cGain.connect(master);cSrc.start();
+      this.eng={nFil,nGain,sub,subGain,cFil,cGain};
+    }catch(e){}
+  },
+  resume(){if(this.ctx&&this.ctx.state==='suspended')this.ctx.resume();},
+  engine(th,boosting,warp){
+    if(!this.ctx||!this.eng||this.muted)return;
+    const t=this.ctx.currentTime,thA=Math.abs(th),e=this.eng;
+    e.nGain.gain.setTargetAtTime(.03+thA*.22+(boosting?.12:0)+(warp>0?.06:0),t,.09);
+    e.nFil.frequency.setTargetAtTime(90+thA*300+(boosting?250:0),t,.09);
+    e.subGain.gain.setTargetAtTime(.02+thA*.06,t,.09);
+    e.sub.frequency.setTargetAtTime(30+thA*26+(boosting?14:0),t,.09);
+    e.cGain.gain.setTargetAtTime(thA*.10+(boosting?.06:0)+(warp>0?.04:0),t,.09);
+    e.cFil.frequency.setTargetAtTime(500+thA*600+(boosting?500:0),t,.09);
+  },
+  tone(freq,dur,type,vol,slide){
+    if(!this.ctx||this.muted)return;
+    try{
+      const t=this.ctx.currentTime,o=this.ctx.createOscillator(),g=this.ctx.createGain();
+      o.type=type||'sine';o.frequency.setValueAtTime(freq,t);
+      if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,freq+slide),t+dur);
+      g.gain.setValueAtTime(vol||.15,t);g.gain.exponentialRampToValueAtTime(.0001,t+dur);
+      o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur+.02);
+    }catch(e){}
+  },
+  noiseBurst(dur,vol,from,to){
+    if(!this.ctx||this.muted)return;
+    try{
+      const t=this.ctx.currentTime,len=Math.floor(this.ctx.sampleRate*dur),
+        b=this.ctx.createBuffer(1,len,this.ctx.sampleRate),ch=b.getChannelData(0);
+      for(let i=0;i<len;i++)ch[i]=(Math.random()*2-1)*(1-i/len);
+      const s=this.ctx.createBufferSource();s.buffer=b;
+      const f=this.ctx.createBiquadFilter();f.type='lowpass';
+      f.frequency.setValueAtTime(from,t);f.frequency.exponentialRampToValueAtTime(to,t+dur);
+      const g=this.ctx.createGain();g.gain.value=vol;
+      s.connect(f);f.connect(g);g.connect(this.master);s.start(t);
+    }catch(e){}
+  },
+  blip(f){this.tone(f||880,.09,'square',.06);},
+  warp(){this.noiseBurst(.9,.35,400,6000);this.tone(120,.9,'sawtooth',.12,700);},
+  arrive(){this.tone(660,.18,'sine',.14);setTimeout(()=>this.tone(990,.25,'sine',.12),140);},
+  scan(){this.tone(740,.12,'sine',.12);setTimeout(()=>this.tone(1108,.2,'sine',.1),110);},
+  crash(){this.noiseBurst(.35,.4,2500,120);this.tone(90,.35,'sine',.25,-50);},
+  alarm(f){this.tone(f||520,.16,'square',.09);setTimeout(()=>this.tone(f||520,.16,'square',.09),220);},
+  toggleMute(){this.muted=!this.muted;if(this.master)this.master.gain.value=this.muted?0:.9;return this.muted;}
+};
+function initAudio(){Snd.init();Snd.resume();}
+function toggleMute(){
+  const m=Snd.toggleMute();
+  document.getElementById('btnMute').textContent=m?'🔇 SUARA: OFF':'🔊 SUARA: ON';
+  if(!m)Snd.blip(800);
 }
 
 /* ============ LOOP ============ */
@@ -982,13 +1089,14 @@ const marker=document.getElementById('marker'),markerTxt=document.getElementById
 document.getElementById('btnStart').onclick=()=>{
   document.getElementById('start').style.display='none';
   state.started=true;initAudio();
-  toast('🚀 Selamat terbang, Kapten! Dekati MARS atau buka PETA [G]');
+  toast(LOW_MEM?'🚀 Selamat terbang! 📱 Mode HEMAT dikunci (RAM kecil)':'🚀 Selamat terbang, Kapten! Dekati MARS atau buka PETA [G]',3500);
   refreshTargetUI();renderPlanetList();
 };
 // Mobile Safari sering men-suspend AudioContext — resume saat sentuhan pertama
-addEventListener('touchstart',function resumeAC(){if(AC&&AC.state==='suspended')AC.resume();},{passive:true});
+addEventListener('touchstart',function resumeAC(){Snd.resume();},{passive:true});
 refreshTargetUI();
 document.getElementById('missionTxt').textContent=`0 / ${ALL_PLANETS.length} planet`;
+document.getElementById('btnQuality').textContent=QUALITY==='hemat'?'⚙️ HEMAT: ON':'⚙️ FULL: ON';
 updateFollowUI();
 
 // suara + posisi awal kamera
@@ -1057,7 +1165,7 @@ function update(dt){
     rocket.position.lerpVectors(state.warpFrom,state.warpTo,Math.min(1,state.warping));
     state.vel.set(0,0,0);
     flame.scale.set(16,16,1);
-    if(state.warping>=1){state.warping=0;speedlines.style.opacity=0;toast('✅ Tiba di '+targetObj().data.name);}
+    if(state.warping>=1){state.warping=0;speedlines.style.opacity=0;Snd.arrive();toast('✅ Tiba di '+targetObj().data.name);}
   } else {
     speedlines.style.opacity=boosting?1:0;
     if(thrust!==0){
@@ -1126,7 +1234,7 @@ function update(dt){
     const R=o.data.r;
     if(d<R+4){
       // menabrak keras (toast di-throttle 1.5 detik agar tidak spam)
-      if(spdNow>60){state.hull-=dt*30;if(nowMs-(state._colToast||0)>1500){state._colToast=nowMs;toast('💥 TABRAKAN! Perlambat!');}}
+      if(spdNow>60){state.hull-=dt*30;if(nowMs-(state._colToast||0)>1500){state._colToast=nowMs;Snd.crash();toast('💥 TABRAKAN! Perlambat!');}}
       // pantulkan menjauhi pusat planet
       colV.copy(rocket.position).sub(wp);
       if(colV.lengthSq()<1e-6)colV.set(0,1,0);
@@ -1136,6 +1244,7 @@ function update(dt){
     } else if(d<R+45&&!state.visited.has(o.data.name)){
       state.visited.add(o.data.name);
       document.getElementById('missionTxt').textContent=`${state.visited.size} / ${ALL_PLANETS.length} planet`;
+      Snd.scan();
       toast(`🛰️ MEMINDAI ${o.data.name}: ${o.data.desc}`,4200);
       state.fuel=Math.min(100,state.fuel+25); // isi ulang dari surya
     }
@@ -1151,7 +1260,9 @@ function update(dt){
     state.vel.set(0,0,0);state.throttle=0;
     toast('🔧 Roket diperbaiki & kembali ke Bumi');
   }
-  if(bhD<90){state.hull=Math.max(0,state.hull-dt*40);if(nowMs-(state._bhToast||0)>1500){state._bhToast=nowMs;toast('⚠️ LUBANG HITAM! KABUR!');}}
+  if(bhD<90){state.hull=Math.max(0,state.hull-dt*40);if(nowMs-(state._bhToast||0)>1500){state._bhToast=nowMs;Snd.alarm(220);toast('⚠️ LUBANG HITAM! KABUR!');}}
+  if(state.fuel<15&&nowMs-(state._fuelToast||0)>5000){state._fuelToast=nowMs;Snd.alarm(660);toast('⛽ Bahan bakar menipis! Dekati planet untuk isi ulang');}
+  if(state.hull<30&&state.hull>0&&nowMs-(state._hullToast||0)>5000){state._hullToast=nowMs;Snd.alarm(440);toast('🔧 Lambung kritis! Hindari tabrakan');}
 
   // kamera POV lebar, WORLD-FRAME: orientasi pandangan tidak ikut haluan roket,
   // hanya posisinya yang mengikuti roket. flightDir = arah pandang = arah terbang.
@@ -1186,8 +1297,8 @@ function update(dt){
     if(Math.abs(camera.fov-targetFov)>.05){camera.fov+=(targetFov-camera.fov)*Math.min(1,dt*4);camera.updateProjectionMatrix();}
   }
 
-  // audio
-  if(oscGain)oscGain.gain.value=Math.min(.12,Math.abs(state.throttle)*.08+(boosting?.1:0));
+  // audio mesin realistis (rumble + sub + whine mengikuti throttle)
+  Snd.engine(state.throttle,boosting,state.warping);
 
   /* HUD (di-throttle agar hemat CPU tablet) */
   state._hudT=(state._hudT||0)+dt;
