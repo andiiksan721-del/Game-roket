@@ -999,7 +999,10 @@ const Snd={
     try{
       const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
       const ctx=this.ctx=new C();
-      const master=this.master=ctx.createGain();master.gain.value=.9;master.connect(ctx.destination);
+      const master=this.master=ctx.createGain();master.gain.value=.9;
+      const comp=ctx.createDynamicsCompressor(); // limiter: cegah pecah saat boost+warp+alarm menumpuk
+      comp.threshold.value=-18;comp.ratio.value=8;comp.attack.value=.004;comp.release.value=.2;
+      master.connect(comp);comp.connect(ctx.destination);
       // buffer derau cokelat 2 detik (rumble mesin diesel-roket)
       const len=ctx.sampleRate*2,buf=ctx.createBuffer(1,len,ctx.sampleRate),ch=buf.getChannelData(0);
       let last=0;
@@ -1009,8 +1012,8 @@ const Snd={
       const nFil=ctx.createBiquadFilter();nFil.type='lowpass';nFil.frequency.value=90;nFil.Q.value=.6;
       const nGain=ctx.createGain();nGain.gain.value=0;
       nSrc.connect(nFil);nFil.connect(nGain);nGain.connect(master);nSrc.start();
-      // 2) dengung sub (badan roket bergetar, 30–60 Hz)
-      const sub=ctx.createOscillator();sub.type='sawtooth';sub.frequency.value=32;
+      // 2) dengung sub murni (sine 30–60 Hz, hanya terasa menggetar, tanpa dengung musikal)
+      const sub=ctx.createOscillator();sub.type='sine';sub.frequency.value=32;
       const subFil=ctx.createBiquadFilter();subFil.type='lowpass';subFil.frequency.value=160;
       const subGain=ctx.createGain();subGain.gain.value=0;
       sub.connect(subFil);subFil.connect(subGain);subGain.connect(master);sub.start();
@@ -1020,16 +1023,35 @@ const Snd={
       const cSrc=ctx.createBufferSource();cSrc.buffer=wbuf;cSrc.loop=true;
       const cFil=ctx.createBiquadFilter();cFil.type='bandpass';cFil.frequency.value=700;cFil.Q.value=.7;
       const cGain=ctx.createGain();cGain.gain.value=0;
-      const lfo=ctx.createOscillator();lfo.type='square';lfo.frequency.value=11;
-      const lfo2=ctx.createOscillator();lfo2.type='square';lfo2.frequency.value=7.3;
-      const lfoAmt=ctx.createGain();lfoAmt.gain.value=.05;
-      lfo.connect(lfoAmt);lfo2.connect(lfoAmt);lfoAmt.connect(cGain.gain);
-      lfo.start();lfo2.start();
+      // TANPA LFO periodik: krekle dimodulasi acak per-frame di engine() (seperti semburan asli)
       cSrc.connect(cFil);cFil.connect(cGain);cGain.connect(master);cSrc.start();
       this.eng={nFil,nGain,sub,subGain,cFil,cGain};
     }catch(e){}
   },
   resume(){if(this.ctx&&this.ctx.state==='suspended')this.ctx.resume();},
+  async loadRoar(){ // rekaman peluncuran NASA asli (domain publik) sebagai lapis utama
+    if(!this.ctx||this.roar||this._roarTried)return; this._roarTried=true;
+    const urls=[
+      'https://archive.org/download/NasaAudioHighlightReels/Launch-Sound_Redstone-Launch.ogg', // ringan 0,8MB
+      'https://archive.org/download/NasaAudioHighlightReels/Launch-Sound_Redstone-Launch.mp3', // universal
+      'https://archive.org/download/NasaAudioHighlightReels/Launch-Sound_Delta-2-Launch.ogg',
+    ];
+    for(const u of urls){
+      try{
+        const r=await fetch(u); if(!r.ok)continue;
+        const buf=await this.ctx.decodeAudioData(await r.arrayBuffer());
+        if(!buf||buf.duration<3)continue;
+        const src=this.ctx.createBufferSource();src.buffer=buf;src.loop=true;
+        src.loopStart=buf.duration*.25;src.loopEnd=buf.duration*.85; // segmen tengah = raungan murni
+        src.playbackRate.value=.9;
+        const fil=this.ctx.createBiquadFilter();fil.type='lowpass';fil.frequency.value=600;fil.Q.value=.5;
+        const g=this.ctx.createGain();g.gain.value=0;
+        src.connect(fil);fil.connect(g);g.connect(this.master);src.start();
+        this.roar={src,fil,g};
+        break;
+      }catch(e){}
+    }
+  },
   engine(th,boosting,warp){
     if(!this.ctx||!this.eng||this.muted)return;
     const t=this.ctx.currentTime,thA=Math.abs(th),e=this.eng;
@@ -1037,8 +1059,14 @@ const Snd={
     e.nFil.frequency.setTargetAtTime(90+thA*300+(boosting?250:0),t,.09);
     e.subGain.gain.setTargetAtTime(.02+thA*.06,t,.09);
     e.sub.frequency.setTargetAtTime(30+thA*26+(boosting?14:0),t,.09);
-    e.cGain.gain.setTargetAtTime(thA*.10+(boosting?.06:0)+(warp>0?.04:0),t,.09);
+    e.cGain.gain.setTargetAtTime((thA*.10+(boosting?.06:0)+(warp>0?.04:0))*(0.6+Math.random()*0.8),t,.03);
     e.cFil.frequency.setTargetAtTime(500+thA*600+(boosting?500:0),t,.09);
+    if(this.roar){ // rekaman NASA: nada & saringan mengikuti gas
+      const R=this.roar;
+      R.g.gain.setTargetAtTime(thA*.30+(boosting?.12:0)+(warp>0?.05:0),t,.1);
+      R.fil.frequency.setTargetAtTime(350+thA*900+(boosting?600:0),t,.1);
+      R.src.playbackRate.setTargetAtTime(.85+thA*.35+(boosting?.1:0),t,.15);
+    }
   },
   tone(freq,dur,type,vol,slide){
     if(!this.ctx||this.muted)return;
@@ -1071,7 +1099,7 @@ const Snd={
   alarm(f){this.tone(f||520,.16,'square',.09);setTimeout(()=>this.tone(f||520,.16,'square',.09),220);},
   toggleMute(){this.muted=!this.muted;if(this.master)this.master.gain.value=this.muted?0:.9;return this.muted;}
 };
-function initAudio(){Snd.init();Snd.resume();}
+function initAudio(){Snd.init();Snd.resume();Snd.loadRoar();}
 function toggleMute(){
   const m=Snd.toggleMute();
   document.getElementById('btnMute').textContent=m?'🔇 SUARA: OFF':'🔊 SUARA: ON';
