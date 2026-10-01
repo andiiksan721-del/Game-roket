@@ -74,6 +74,13 @@
   #planetBadges span{border:1px solid rgba(125,196,255,.35);border-radius:20px;padding:3px 10px;background:rgba(20,40,80,.5)}
   #toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:15;background:rgba(10,20,40,.9);border:1px solid #7dc4ff;padding:8px 18px;border-radius:20px;font-size:12px;display:none}
   #warpFlash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:5;transition:opacity .4s}
+  /* kunci landscape: perintah putar saat portrait (khusus sentuh) */
+  #rotatePrompt{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:radial-gradient(ellipse at center,#0a1a3f,#01020a);text-align:center;padding:24px}
+  #rotatePrompt .big{font-size:64px;animation:tilt 1.6s ease-in-out infinite}
+  @keyframes tilt{0%,100%{transform:rotate(0)}50%{transform:rotate(90deg)}}
+  #rotatePrompt b{font-size:20px;letter-spacing:3px;color:#7dc4ff}
+  #rotatePrompt span{font-size:13px;opacity:.8;max-width:320px;line-height:1.6}
+  @media(orientation:portrait){body.touch #rotatePrompt{display:flex}}
   /* Kontrol sentuh tablet/HP */
   #touchUI{position:fixed;inset:0;z-index:11;pointer-events:none;display:none}
   body.touch #touchUI{display:block}
@@ -127,6 +134,7 @@
 <div id="vignette"></div>
 <div id="speedlines"></div>
 <div id="warpFlash"></div>
+<div id="rotatePrompt"><div class="big">📱</div><b>PUTAR KE LANDSCAPE</b><span>Game ini dikunci miring agar kontrol joystick, HUD, dan pandangan roket pas di layar.</span></div>
 
 <div id="hud">
   <div id="topbar">
@@ -891,6 +899,17 @@ document.getElementById('btnQuality').onclick=function(){
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 // hemat baterai: pause saat tab disembunyikan
 let hidden=false;
+// kunci landscape (Android Chrome via fullscreen; iOS fallback = layar perintah putar)
+async function lockLandscape(){
+  try{
+    if(!document.fullscreenElement&&document.documentElement.requestFullscreen)
+      await document.documentElement.requestFullscreen();
+  }catch(e){}
+  try{
+    if(screen.orientation&&screen.orientation.lock)
+      await screen.orientation.lock('landscape');
+  }catch(e){}
+}
 document.addEventListener('visibilitychange',()=>{hidden=document.hidden;if(!Snd.ctx)return;if(hidden)Snd.ctx.suspend();else if(state.started)Snd.resume();});
 
 function cycleTarget(d){
@@ -1116,7 +1135,7 @@ const marker=document.getElementById('marker'),markerTxt=document.getElementById
 
 document.getElementById('btnStart').onclick=()=>{
   document.getElementById('start').style.display='none';
-  state.started=true;initAudio();
+  state.started=true;initAudio();lockLandscape();
   toast(LOW_MEM?'🚀 Selamat terbang! 📱 Mode HEMAT dikunci (RAM kecil)':'🚀 Selamat terbang, Kapten! Dekati MARS atau buka PETA [G]',3500);
   refreshTargetUI();renderPlanetList();
 };
@@ -1372,8 +1391,10 @@ function loop(){
   requestAnimationFrame(loop);
   if(hidden)return; // pause saat tab hidden -> hemat RAM/baterai
   const dt=Math.min(clock.getDelta(),.05);
-  if(state.started)update(dt);
-  else{
+  // kunci landscape: hentikan simulasi saat portrait (hemat baterai, prompt menutupi layar)
+  const needPortrait=document.body.classList.contains('touch')&&innerHeight>innerWidth;
+  if(state.started&&!needPortrait)update(dt);
+  else if(!state.started&&!needPortrait){
     // sinematik menu: roket mengorbit Bumi (tanpa alokasi per-frame)
     const e=planetObjs.find(o=>o.data.name==='Bumi')||planetObjs[2];
     if(e){const wp=e.mesh.getWorldPosition(tmpV2);
